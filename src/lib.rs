@@ -1,4 +1,4 @@
-use pcap::{Device, Capture, Packet, PacketHeader};
+use pcap::{Device, Capture, Packet, PacketHeader, ConnectionStatus};
 use pktparse::{ethernet, ipv4, tcp, udp, ip};
 use std::net::Ipv4Addr;
 
@@ -14,7 +14,9 @@ pub struct TupleReport {
     //pub descr: String,
 }
 
-//implementare tratto display per la struct tupleReport
+//TODO implementare tratto display e copy per la struct tupleReport??
+//TODO ampliare gamma di protocolli
+
 impl TupleReport {
     pub fn new() -> Self {
         TupleReport {
@@ -29,7 +31,7 @@ impl TupleReport {
             //descr: "".to_string(),
         }
     }
-    // Parsing headers and insert filter (decidere ancora dove implementare filter)
+    //TODO Parsing headers and insert filter (decidere ancora dove implementare filter)
 }
 
 // Start capture --> default snaplen is 65535 (the maximum length of a packet captured into the buffer).
@@ -38,7 +40,7 @@ pub fn start_capture(interface_name: &str) -> () { //esiste la filter e la stats
         .promisc(true)
         .open().unwrap();// activate the handle // assume activation worked
     //check error in opening and starting a capture
-    println!("Sniffing process is active");
+    println!("Sniffing process in promiscuous mode is active on interface: {}", interface_name);
 
     let mut tr = TupleReport::new();
     while let Ok(packet) = cap.next_packet() { //fare controllo sul next packet
@@ -85,7 +87,12 @@ pub fn list_all_devices() -> Vec<Device> {
     let devices = Device::list().unwrap();
 
     for d in &devices {
-        println!("{:?}:{:?}", d.name, d.flags.connection_status);
+        if d.flags.connection_status.eq(&ConnectionStatus::Connected){
+            println!("{:?}:{:?} - IP Net interface: {:?}", d.name, d.flags.connection_status, d.addresses[1].addr);
+        }else {
+            println!("{:?}:{:?}", d.name, d.flags.connection_status);
+        }
+
     }
     devices
 }
