@@ -1,9 +1,7 @@
-use packet_sniffer::{list_all_devices, start_capture, TupleReport};
+use packet_sniffer::{list_all_devices, start_capture};
 
 //TODO come mettere in pausa la capture? metto in pausa il thread che la sta eseguendo?
 //TODO come riprendere la capture?
-//TODO come considerare una connessione TCP/UDP, basta network/port pairs? Distinguere tra uplink e downlink?
-//TODO come calcolare il numero totale di bytes trasmessi (suppongo sia da calcolare per ogni direzione)?
 //TODO come gestire gli errori ?
 
 fn main() {
