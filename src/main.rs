@@ -1,11 +1,9 @@
 use packet_sniffer::{list_all_devices, start_capture, TupleReport};
 
-//TODO aggiungere compatibilià con wifi 802.11
 //TODO come mettere in pausa la capture? metto in pausa il thread che la sta eseguendo?
 //TODO come riprendere la capture?
 //TODO come considerare una connessione TCP/UDP, basta network/port pairs? Distinguere tra uplink e downlink?
 //TODO come calcolare il numero totale di bytes trasmessi (suppongo sia da calcolare per ogni direzione)?
-//TODO come faccio a sapere qual è il primo e l'ultimo pacchetto? uso SYN e FIN?
 //TODO come gestire gli errori ?
 
 fn main() {
@@ -16,7 +14,7 @@ fn main() {
 
     //1. TODO insert a network interface connected -> Check error!
     //2. TODO start a capture -> indicate sniffing is ongoing
-    start_capture("en3"); // per adesso solo con ethernet
+    start_capture("en3"); // per adesso solo con ethernet ed eventualmente il TODO filtro
     //3. TODO mettere in pausa una capture
     //4. TODO riprendere una capture
     //5. TODO generare report testuale dopo X secondi in un file passato come argomento
