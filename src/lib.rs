@@ -144,7 +144,7 @@ fn parsing(report: &mut HashMap<ConnInfo,ConnData>,packet: Packet) -> () {
                                 reporting(report,datagram, segment.source_port, segment.dest_port, packet.header, payload_e.len());
                                 app_recognition_tcp(segment.source_port, segment.dest_port);
                                 //println!("{:?}", segment);
-                                print_hashmap(report);
+                                //print_hashmap(report);
                             } else {
                                 println!("Error parsing TCP segment.");
                             }
