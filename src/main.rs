@@ -12,7 +12,7 @@ fn main() {
 
     //1. TODO insert a network interface connected -> Check error!
     //2. TODO start a capture -> indicate sniffing is ongoing
-    start_capture("en3","icmp or arp"); // per adesso solo con ethernet ed eventualmente il TODO filtro
+    start_capture("en3",""); // per adesso solo con ethernet ed eventualmente il TODO filtro
     //3. TODO mettere in pausa una capture
     //4. TODO riprendere una capture
     //5. TODO generare report testuale dopo X secondi in un file passato come argomento

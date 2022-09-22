@@ -144,6 +144,7 @@ fn parsing(report: &mut HashMap<ConnInfo,ConnData>,packet: Packet) -> () {
                                 reporting(report,datagram, segment.source_port, segment.dest_port, packet.header, payload_e.len());
                                 app_recognition_tcp(segment.source_port, segment.dest_port);
                                 //println!("{:?}", segment);
+                                print_hashmap(report);
                             } else {
                                 println!("Error parsing TCP segment.");
                             }
@@ -187,7 +188,6 @@ fn parsing(report: &mut HashMap<ConnInfo,ConnData>,packet: Packet) -> () {
         println!("Error parsing Ethernet frame.");
     }
 }
-
 
 pub fn start_capture(interface_name: &str, bpf_program: &str) -> () {
     let mut cap = Capture::from_device(interface_name).unwrap()// TODO assume the device exists and we are authorized to open it
