@@ -50,12 +50,11 @@ impl ConnData {
             total_bytes,
         }
     }
-
 }
 
 impl Display for ConnData {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f,"(tot_bytes:{} ts_first:{}.{:06} ts_last:{}.{:06})",self.total_bytes,self.ts_first.tv_sec, self.ts_first.tv_usec, self.ts_last.tv_sec, self.ts_last.tv_usec)
+        write!(f, "(tot_bytes:{} ts_first:{}.{:06} ts_last:{}.{:06})", self.total_bytes, self.ts_first.tv_sec, self.ts_first.tv_usec, self.ts_last.tv_sec, self.ts_last.tv_usec)
     }
 }
 
@@ -102,23 +101,26 @@ pub fn print_hashmap(hm: &HashMap<ConnInfo, ConnData>) -> () {
     }
 }
 
-pub fn start_capture(interface_name: &str) -> () {
+pub fn start_capture(interface_name: &str, bpf_program: &str) -> () {
     let mut cap = Capture::from_device(interface_name).unwrap()// TODO assume the device exists and we are authorized to open it
         .promisc(true)
-        .open().unwrap();//TODO check error in opening and starting a capture
+       // .snaplen(65535)
+        //.buffer_size(65)//serve per vedere subito output quando inviamo pochi dati, altrimenti non vedevo efficacia filtri
+        .open().unwrap()
+        ;//TODO check error in opening and starting a capture
 
     println!("Sniffing process in promiscuous mode is active on interface: {}", interface_name);
 
     let mut report: HashMap<ConnInfo, ConnData> = HashMap::new();
 
+    cap.filter(bpf_program, true).unwrap();
     while let Ok(packet) = cap.next_packet() { //TODO fare controllo sul next packet
 
         if let Ok((payload_e, frame)) = ethernet::parse_ethernet_frame(packet.data) {
-            println!("{}", payload_e.len());
+            //println!("{}", payload_e.len());
             match frame.ethertype {
                 ethernet::EtherType::IPv4 => {
                     if let Ok((payload_i, datagram)) = ipv4::parse_ipv4_header(payload_e) {
-
                         match datagram.protocol {
                             IPProtocol::TCP => {
                                 if let Ok((_payload_t, segment)) = tcp::parse_tcp_header(payload_i) {
@@ -131,6 +133,7 @@ pub fn start_capture(interface_name: &str) -> () {
                                             cd.ts_last = packet.header.ts
                                         })
                                         .or_insert(cd);
+                                    println!("{:?}", segment);
                                     if segment.dest_port == 80 || segment.source_port == 80 { //capire come considerare le porte
                                         //println!("HTTP message.");
                                     } else if segment.dest_port == 443 || segment.source_port == 443 {
@@ -155,6 +158,7 @@ pub fn start_capture(interface_name: &str) -> () {
                                             cd.ts_last = packet.header.ts
                                         })
                                         .or_insert(cd);
+                                    println!("{:?}", udp_datagram);
                                     if udp_datagram.dest_port == 53 || udp_datagram.source_port == 53 {
                                         // println!("DNS message.");
                                     } else if udp_datagram.dest_port == 161 || udp_datagram.source_port == 161 {
@@ -166,7 +170,9 @@ pub fn start_capture(interface_name: &str) -> () {
                             }
 
                             IPProtocol::ICMP => { //TODO
-                                if let Ok((_payload, _packet)) = icmp::parse_icmp_header(payload_i) {} else {
+                                if let Ok((_payload, _packet)) = icmp::parse_icmp_header(payload_i) {
+                                    println!("{:?}", _packet);
+                                } else {
                                     println!("Error parsing ICMP packet.");
                                 }
                             }
@@ -180,7 +186,9 @@ pub fn start_capture(interface_name: &str) -> () {
 
                 //TODO ethernet::EtherType::IPv6 => {}
                 ethernet::EtherType::ARP => { //TODO manage for report
-                    if let Ok((_payload, _packet)) = arp::parse_arp_pkt(payload_e) {} else {
+                    if let Ok((_payload, _packet)) = arp::parse_arp_pkt(payload_e) {
+                        println!("{:x?}", _packet);
+                    } else {
                         println!("Error parsing ARP packet.");
                     }
                 }
