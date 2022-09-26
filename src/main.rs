@@ -244,7 +244,6 @@ fn main() {
                 break;
             }
             "help" | "h" => {
-                // stampa "Comandi possibili: >Pausa (p) >Riprendi >Stop"
                 println!(
 "> Pause (p)    => Pauses packet acquisition and report generation.
 > Resume (r)    => Resumes packet acquisition and report generation.
