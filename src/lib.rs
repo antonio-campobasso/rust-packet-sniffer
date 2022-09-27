@@ -11,6 +11,7 @@ use pktparse::ip::IPProtocol;
 use pktparse::ipv4::IPv4Header;
 
 //TODO racchiudere le due struct ConnInfo e ConnData in un'altra struct???
+//--------------------------------------
 #[derive(Eq, PartialEq, Hash, Debug)]
 pub struct ConnInfo {
     pub src: Ipv4Addr,
@@ -40,7 +41,7 @@ impl Display for ConnInfo {
     }
 }
 
-
+//---------------------------
 pub struct ConnData {
     pub ts_first: libc::timeval,
     pub ts_last: libc::timeval,
@@ -64,7 +65,7 @@ impl Display for ConnData {
     }
 }
 
-
+//-------------------------------------
 pub trait ToStr {
     fn tostring(&self) -> String;
 }
@@ -80,6 +81,7 @@ impl ToStr for IPProtocol {
     }
 }
 
+//--------------------------------------
 pub struct PacketData {
     pub ci: ConnInfo,
     pub cd: ConnData,
@@ -93,6 +95,7 @@ impl PacketData {
     }
 }
 
+//----------------------------------------
 pub struct CaptureDevice {
     interface_name: String,
     filter: Option<String>,
@@ -119,6 +122,7 @@ impl CaptureDevice {
     }
 }
 
+//----------------------------------------------
 // TODO: Implementare il tratto drop?
 pub struct ReportCollector {
     report: HashMap<ConnInfo, ConnData>,
@@ -155,6 +159,7 @@ impl ReportCollector {
     }
 }
 
+//----------------------------------------------------------
 // list devices
 pub fn list_all_devices() -> Vec<Device> {
     let devices = Device::list().unwrap();
@@ -171,28 +176,6 @@ pub fn list_all_devices() -> Vec<Device> {
     devices
 }
 
-//service function to print the hashmap
-fn print_hashmap(hm: &HashMap<ConnInfo, ConnData>) -> () {
-    let mut i = 1;
-
-    for (key, value) in hm {
-        println!("{}|{}:{}", i, key, value);
-        i += 1;
-    }
-}
-
-/*
-fn reporting(report: &mut HashMap<ConnInfo, ConnData>, datagram: IPv4Header, src: u16, dst: u16, packet_header: &PacketHeader, length: usize) -> () {
-    let ci = ConnInfo::new(datagram.source_addr, datagram.dest_addr, src, dst, datagram.protocol.tostring(), "".to_string());
-    let cd = ConnData::new(packet_header.ts, packet_header.ts, length + 38);
-    report.entry(ci)
-        .and_modify(|cd| {
-            cd.total_bytes += length + 38;
-            cd.ts_last = packet_header.ts
-        })
-        .or_insert(cd);
-}
-*/
 fn app_recognition_udp(src: u16, dst: u16) -> () {
     if dst == 53 || src == 53 {
         // println!("DNS message.");
@@ -279,27 +262,16 @@ fn parse(packet: Packet) -> PacketData { // TODO errori e app recognition
     }
 }
 
-/*pub fn start_capture(interface_name: &str, bpf_program: &str) -> () {
-    let mut cap = Capture::from_device(interface_name).unwrap()// TODO assume the device exists and we are authorized to open it
-        .promisc(true)
-        //.snaplen(65535)
-        //.buffer_size(65)//serve per vedere subito output quando inviamo pochi dati, altrimenti non vedevo efficacia filtri
-        .open().unwrap();//TODO check error in opening and starting a capture
+//service function to print the hashmap
+/*fn print_hashmap(hm: &HashMap<ConnInfo, ConnData>) -> () {
+    let mut i = 1;
 
-    println!("Sniffing process in promiscuous mode is active on interface: {}", interface_name);
-    cap.filter(bpf_program, true).unwrap();
-
-    //TODO lasciare la dichiarazione dell'HashMap report dentro start_capture?
-    //Dichiarazione out of function
-    let mut report: HashMap<ConnInfo, ConnData> = HashMap::new();
-
-    while let Ok(packet) = cap.next_packet() { //TODO fare controllo sul next packet
-        parsing(&mut report, packet);
-
-        //fare il ciclo while all'interno di un'altra funzione????
+    for (key, value) in hm {
+        println!("{}|{}:{}", i, key, value);
+        i += 1;
     }
-    print_hashmap(&report);
 }*/
+
 
 
 
