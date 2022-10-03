@@ -1,3 +1,5 @@
+use packet_sniffer::*;
+
 use std::{
     collections::HashMap,
     fs::File,
@@ -39,72 +41,6 @@ struct Args {
     filter: Option<String>,
 }
 
-// es. ./cablecrab <interface> <intervallo> <output_file>
-// oppure ./cablecrab -g per far partire la cosa guidata
-
-/// -------------------------------------------------------- Dummy
-
-#[derive(Eq, PartialEq, Hash)]
-struct ConnInfo {}
-
-#[derive(Eq, PartialEq, Hash)]
-struct ConnData {}
-
-struct Packet {
-    info: ConnInfo,
-    data: ConnData,
-}
-
-// TODO: Implementare il tratto drop?
-struct ReportCollector {
-    hash_map: HashMap<ConnInfo, ConnData>,
-}
-
-impl ReportCollector {
-    fn new() -> Self {
-        ReportCollector {
-            hash_map: HashMap::new(),
-        }
-    }
-
-    fn add_packet(&mut self, packet: Packet) -> () {
-        self.hash_map.insert(packet.info, packet.data);
-    }
-
-    fn produce_report(&self) -> String {
-        println!("Report in stampa");
-        sleep(Duration::from_secs(2));
-        println!("Report Stampato");
-        "rep".to_string()
-    }
-
-    fn produce_report_to_file(&self, file_name: PathBuf) -> () {
-        let s = self.produce_report();
-        let mut f = File::create(file_name).unwrap();
-
-        f.write_all(s.as_bytes());
-    }
-}
-
-struct Capture {
-    interface: String,
-    filter: String,
-}
-
-impl Capture {
-    fn new(interface: String, filter: String) -> Self {
-        Capture { interface, filter }
-    }
-
-    fn next_packet(&self) -> Result<Packet, Error> {
-        Ok(Packet {
-            info: ConnInfo {},
-            data: ConnData {},
-        })
-    }
-}
-
-/// -------------------------------------------------------- Dummy
 
 #[derive(PartialEq)]
 enum State {
@@ -130,10 +66,11 @@ fn main() {
     let stop_flag = Arc::new(Mutex::new(false));
     // NOTE: non posso usare STOP come stato perchè altrimenti si rischia il deadlock
 
+    //list_all_devices()
     // TODO: modalità per inserire i valori uno ad uno. Vale la pena? magari impostare solo valori default senza guided mode?
     match cli.network_interface {
         Some(interface) => network_interface = interface,
-        None => network_interface = "eth0".to_string(), //qui da cambiare, prendi la lista di dispositivi e prendi il primo
+        None => network_interface = "en3".to_string(), //qui da cambiare, prendi la lista di dispositivi e prendi il primo
     }
 
     match cli.time_interval {
@@ -163,10 +100,10 @@ fn main() {
     let stop_flag_t = stop_flag.clone();
 
     threads.push(thread::spawn(move || {
-        let capture = Capture::new(network_interface, filter);
+        let mut capture = CaptureDevice::new(network_interface, Some(filter));
         while let Ok(packet) = capture.next_packet() {
-            sleep(Duration::from_secs(3)); // DEBUG
-            println!("Pacchetto catturato"); // DEBUG
+            //sleep(Duration::from_secs(3)); // DEBUG
+            //println!("Pacchetto catturato"); // DEBUG
 
             let (lock, cvar) = &*prog_state_t;
             let _guard = cvar.wait_while(lock.lock().unwrap(), |state| *state == State::PAUSE);
@@ -175,10 +112,10 @@ fn main() {
             if *stop {
                 break;
             }
-
+            println!("Pacchetto Inserito : {:?} - {}", packet.ci, packet.cd); // DEBUG
             let mut rep = report_collector_t.lock().unwrap(); //ERR: sistema
             rep.add_packet(packet); //ERR: sistema
-            println!("Pacchetto Inserito"); // DEBUG
+
         }
         println!("Capture connection terminated.");
     }));
@@ -245,7 +182,7 @@ fn main() {
             }
             "help" | "h" => {
                 println!(
-"> Pause (p)    => Pauses packet acquisition and report generation.
+                    "> Pause (p)    => Pauses packet acquisition and report generation.
 > Resume (r)    => Resumes packet acquisition and report generation.
 > Stop (s)      => Stops the program.
 > Help (h)      => Shows line commands. "
