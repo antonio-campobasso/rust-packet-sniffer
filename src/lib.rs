@@ -6,9 +6,10 @@ use pcap::{Device, Capture, ConnectionStatus, Packet, PacketHeader, Active, Erro
 use pktparse::{ethernet, ipv4, tcp, udp, icmp, arp};
 use std::net::Ipv4Addr;
 use std::path::PathBuf;
-use std::string::ToString;
+use std::string::{ToString, self};
 use pktparse::ip::IPProtocol;
 use pktparse::ipv4::IPv4Header;
+
 
 //TODO racchiudere le due struct ConnInfo e ConnData in un'altra struct???
 //--------------------------------------
@@ -124,9 +125,11 @@ impl CaptureDevice {
 
 //----------------------------------------------
 // TODO: Implementare il tratto drop?
+
 pub struct ReportCollector {
     report: HashMap<ConnInfo, ConnData>,
 }
+
 
 impl ReportCollector {
     pub fn new() -> Self {
@@ -144,18 +147,29 @@ impl ReportCollector {
             .or_insert(packet.cd);
     }
 
-    pub fn produce_report(&self) -> String {
+    /*pub fn produce_report(&self) -> String {
         //println!("Report in stampa");
         //sleep(Duration::from_secs(2));
         //println!("Report Stampato");
-        "rep".to_string()
-    }
+        "res".to_string;
+    }*/
+
 
     pub fn produce_report_to_file(&self, file_name: PathBuf) -> () {
-        let s = self.produce_report();
-        let mut f = File::create(file_name).unwrap();
 
-        f.write_all(s.as_bytes());
+        let mut f = File::create(file_name).unwrap();
+        let header = "\n\t------------------------------------------------------------------------------------\nn\t|\tsorce\t|\tdest \t|\tsrc_p\t|\tdst_p\t|\tprot \t|\tdescr\t|\ttot_b\t|\n\t------------------------------------------------------------------------------------\n".to_string();
+        let footer = "\t------------------------------------------------------------------------------------\n";
+        f.write_all(header.as_bytes());
+        let mut i = 0;
+
+        for (k, v) in self.report.iter() {
+            let s = format!("\t{}\t|\t{}\t|\t{}\t|\t{}\t|\t{}\t|\t{}\t|\t{}\t|\t{}\t|\n",i,k.src.to_string(),k.dst.to_string(),k.src_port.to_string(),k.dst_port.to_string(),k.protocol.to_string(),k.app_descr.to_string(),v.total_bytes.to_string()); 
+            f.write_all(s.as_bytes());
+            i+=1;
+            }
+        f.write_all(footer.as_bytes());
+        //let s = self.report.iter().map(|(k,v)|{k.src.to_string() + k.dst.to_string() + k.src_port.to_string() + k.dst_port.to_string() + k.protocol.to_string() + k.app_descr.to_string() + v.ts_first.to_string() + v.ts_last.to_string() + v.total_bytes.to_string()}).for_each(|x|{f.write_all((header + x).as_byte())});
     }
 }
 
