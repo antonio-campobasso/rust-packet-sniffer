@@ -6,11 +6,12 @@ use pcap::{Device, Capture, ConnectionStatus, Packet, PacketHeader, Active, Erro
 use pktparse::{ethernet, ipv4, tcp, udp, icmp, arp};
 use std::net::Ipv4Addr;
 use std::path::PathBuf;
-use std::string::ToString;
+use std::string::{ToString, self};
+use libc::{sleep, suseconds_t, time, time_t, timeval};
 use pktparse::ip::IPProtocol;
 use pktparse::ipv4::IPv4Header;
 
-//TODO racchiudere le due struct ConnInfo e ConnData in un'altra struct???
+
 //--------------------------------------
 #[derive(Eq, PartialEq, Hash, Debug)]
 pub struct ConnInfo {
@@ -107,7 +108,7 @@ impl CaptureDevice {
         let mut cap = Capture::from_device(interface_name.as_str()).unwrap()// TODO assume the device exists and we are authorized to open it
             .promisc(true)
             //.snaplen(65535)
-            //.buffer_size(65)//serve per vedere subito output quando inviamo pochi dati, altrimenti non vedevo efficacia filtri
+            .buffer_size(65)//serve per vedere subito output quando inviamo pochi dati, altrimenti non vedevo efficacia filtri
             .open().unwrap();//TODO check error in opening and starting a capture
 
         println!("Sniffing process in promiscuous mode is active on interface: {}", interface_name);
@@ -124,18 +125,26 @@ impl CaptureDevice {
 
 //----------------------------------------------
 // TODO: Implementare il tratto drop?
+
 pub struct ReportCollector {
     report: HashMap<ConnInfo, ConnData>,
+    now: libc::timeval
 }
+
 
 impl ReportCollector {
     pub fn new() -> Self {
         ReportCollector {
             report: HashMap::new(),
+            now: libc::timeval { tv_sec: 0, tv_usec: 0 }
         }
     }
 
     pub fn add_packet(&mut self, packet: PacketData) -> () {
+        if self.report.is_empty(){
+            self.now = packet.cd.ts_first;
+        }
+
         self.report.entry(packet.ci)
             .and_modify(|cd| {
                 cd.total_bytes += packet.cd.total_bytes + 38;
@@ -144,18 +153,48 @@ impl ReportCollector {
             .or_insert(packet.cd);
     }
 
-    pub fn produce_report(&self) -> String {
+    /*pub fn produce_report(&self) -> String {
         //println!("Report in stampa");
         //sleep(Duration::from_secs(2));
         //println!("Report Stampato");
-        "rep".to_string()
+        "res".to_string;
+    }*/
+
+    fn sub_timeval(sot: timeval, min: timeval) -> timeval{
+        let tf1 = (sot.tv_sec * 1000000) as u64;
+        let tf2= sot.tv_usec as u64;
+        let tf = tf1+tf2;
+
+        let tl1 = (min.tv_sec * 1000000) as u64;
+        let tl2 = min.tv_usec as u64;
+        let tl = tl1 +tl2;
+        let time= tf-tl;
+
+        let int = time/1000000;
+        let dec = time % 1000000;
+
+        timeval {tv_sec: int as time_t, tv_usec: dec as suseconds_t }
     }
 
     pub fn produce_report_to_file(&self, file_name: PathBuf) -> () {
-        let s = self.produce_report();
-        let mut f = File::create(file_name).unwrap();
 
-        f.write_all(s.as_bytes());
+        let mut f = File::create(file_name).unwrap();
+        let header = "\n\t------------------------------------------------------------------------------------\nn\t|\tsource_ip\t|\tdestination_ip\t|\tsrc_port\t|\tdst_port\t|\tprotocol\t|\ttotal_bytes\t|\tdescription\t|\n\t------------------------------------------------------------------------------------\n".to_string();
+        let footer = "\t------------------------------------------------------------------------------------\n";
+        f.write_all(header.as_bytes());
+        let mut i = 0;
+
+        for (k, v) in self.report.iter() {
+            //let s = format!("\t{:>5}\t|\t{:>15}\t|\t{:>15}\t|\t{:>7}\t|\t{:>7}\t|\t{:>7}\t|\t{:>7}.{:06}\t|\t{:>7}.{:06}\t|\t{:>7}\t|\t{:>7}\t|\n",i,k.src.to_string(),k.dst.to_string(),k.src_port.to_string(),k.dst_port.to_string(),k.protocol.to_string(),(v.ts_first.tv_sec - self.now.tv_sec), (v.ts_first.tv_usec-self.now.tv_usec),(v.ts_last.tv_sec-self.now.tv_sec),(v.ts_last.tv_usec-self.now.tv_usec), v.total_bytes.to_string(),k.app_descr.to_string());
+            let ts_first: libc::timeval = ReportCollector::sub_timeval(v.ts_first,self.now);
+            let ts_last: libc::timeval = ReportCollector::sub_timeval(v.ts_last,self.now);
+            //let s = format!("\t{:>5}\t|\t{:>15}\t|\t{:>15}\t|\t{:>7}\t|\t{:>7}\t|\t{:>7}\t|\t{:>7}.{:06}\t|\t{:>7}.{:06}\t|\t{:>7}\t|\t{:>7}\t|\n",i,k.src.to_string(),k.dst.to_string(),k.src_port.to_string(),k.dst_port.to_string(),k.protocol.to_string(),(v.ts_first.tv_sec - self.now.tv_sec), v.ts_first.tv_usec,(v.ts_last.tv_sec-self.now.tv_sec),v.ts_last.tv_usec, v.total_bytes.to_string(),k.app_descr.to_string());
+            let s = format!("\t{:>5}\t|\t{:>15}\t|\t{:>15}\t|\t{:>7}\t|\t{:>7}\t|\t{:>7}\t|\t{:>7}.{:06}\t|\t{:>7}.{:06}\t|\t{:>7}\t|\t{:>7}\t|\n",i,k.src.to_string(),k.dst.to_string(),k.src_port.to_string(),k.dst_port.to_string(),k.protocol.to_string(),ts_first.tv_sec, ts_first.tv_usec,ts_last.tv_sec,ts_last.tv_usec, v.total_bytes.to_string(),k.app_descr.to_string());
+            f.write_all(s.as_bytes());
+            i+=1;
+        }
+        f.write_all(footer.as_bytes());
+        //let s = self.report.iter().map(|(k,v)|{k.src.to_string() + k.dst.to_string() + k.src_port.to_string() + k.dst_port.to_string() + k.protocol.to_string() + k.app_descr.to_string() + v.ts_first.to_string() + v.ts_last.to_string() + v.total_bytes.to_string()}).for_each(|x|{f.write_all((header + x).as_byte())});
     }
 }
 
@@ -233,7 +272,7 @@ fn parse(packet: Packet) -> PacketData { // TODO errori e app recognition
                             }
                         }*/
                         _ => { panic!()}
-                            //println!("L4 protocol not supported") }
+                        //println!("L4 protocol not supported") }
                     }
                 } else {
                     //println!("Error parsing IP datagram.");
@@ -262,20 +301,73 @@ fn parse(packet: Packet) -> PacketData { // TODO errori e app recognition
     }
 }
 
-//service function to print the hashmap
-/*fn print_hashmap(hm: &HashMap<ConnInfo, ConnData>) -> () {
-    let mut i = 1;
+/*
+pub struct ConnData {
+    pub ts_first_sec: i64,
+    pub ts_first_usec: i64,
+    pub ts_last_sec: i64,
+    pub ts_last_usec: i64,
+    pub total_bytes: usize,
 
-    for (key, value) in hm {
-        println!("{}|{}:{}", i, key, value);
-        i += 1;
+}
+
+impl ConnData {
+    pub fn new(ts_first: libc::timeval, ts_last: libc::timeval, total_bytes: usize) -> Self {
+        let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
+
+
+        ConnData {
+            ts_first_sec : (now.as_secs() as i64 - ts_first.tv_sec ),
+            ts_last_sec : (now.as_secs() as i64 - ts_last.tv_sec  ),
+            ts_first_usec : ts_first.tv_usec  ,
+            ts_last_usec : ts_last.tv_usec ,
+            totalbytes,
+        }
     }
-}*/
+}
+
+impl Display for ConnData {
+    fn fmt(&self, f: &mut Formatter<'>) -> std::fmt::Result {
+        write!(f, "(tot_bytes:{} ts_first:{}.{:06} ts_last:{}.{:06})", self.total_bytes, self.ts_first_sec, self.ts_first_usec, self.ts_last_sec, self.ts_last_usec)
+    }
+}
+
+//------------
+
+pub fn add_packet(&mut self, packet: PacketData) -> () {
+        self.report.entry(packet.ci)
+            .and_modify(|cd| {
+                cd.total_bytes += packet.cd.total_bytes + 38;
+                cd.ts_last_sec = packet.cd.ts_first_sec;
+                cd.ts_last_usec = packet.cd.ts_first_usec
+            })
+            .or_insert(packet.cd);
+    }
+
+    /*pub fn produce_report(&self) -> String {
+        //println!("Report in stampa");
+        //sleep(Duration::from_secs(2));
+        //println!("Report Stampato");
+        "res".to_string;
+    }*/
 
 
+    pub fn produce_report_to_file(&self, file_name: PathBuf) -> () {
 
+        let mut f = File::create(file_name).unwrap();
+        let header = "\n\t---------------------------------------------------------------------------------------------\nn\t|\tsorce\t|\tdest \t|\tsrc_p\t|\tdst_p\t|\tprot \t|\t ts_first \t|\t ts_last  \t|\ttot_b\t|\tdescr\n\t---------------------------------------------------------------------------------------------\n".to_string();
+        let footer = "\t---------------------------------------------------------------------------------------------\n";
+        f.write_all(header.as_bytes());
+        let mut i = 0;
 
-
-
-
+        for (k, v) in self.report.iter() {
+            let s = format!("\t{:>5}\t|\t{:>15}\t|\t{:>15}\t|\t{:>7}\t|\t{:>7}\t|\t{:>7}\t|\t{:>7}.{:06}\t|\t{:>7}.{:06}\t|\t{:>7}\t|\t{:>7}\t|\n",i,k.src.to_string(),k.dst.to_string(),k.src_port.to_string(),k.dst_port.to_string(),k.protocol.to_string(),v.ts_first_sec, v.ts_first_usec,v.ts_last_sec,v.ts_last_usec, v.total_bytes.to_string(),k.app_descr.to_string());
+            f.write_all(s.as_bytes());
+            i+=1;
+            }
+        f.write_all(footer.as_bytes());
+        //let s = self.report.iter().map(|(k,v)|{k.src.to_string() + k.dst.to_string() + k.src_port.to_string() + k.dst_port.to_string() + k.protocol.to_string() + k.app_descr.to_string() + v.ts_first.to_string() + v.ts_last.to_string() + v.total_bytes.to_string()}).for_each(|x|{f.write_all((header + x).as_byte())});
+    }
+}
+*/
 

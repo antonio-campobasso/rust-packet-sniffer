@@ -48,7 +48,7 @@ enum State {
     PAUSE,
 }
 
-const DEFAULT_INTERVAL: u64 = 10;
+const DEFAULT_INTERVAL: u64 = 5;
 const DEFAULT_FILE_NAME: &str = "report.txt";
 
 fn main() {
@@ -58,9 +58,11 @@ fn main() {
     let time_interval: u64 ;
     let output_file ;
     let filter;
+    //let now: libc::timeval = timeval { tv_sec: 0, tv_usec: 0 };
 
     let mut threads = vec![];
 
+    //let report_collector = Arc::new(Mutex::new(ReportCollector::new(now)));
     let report_collector = Arc::new(Mutex::new(ReportCollector::new()));
     let prog_state = Arc::new((Mutex::new(State::RUN), Condvar::new()));
     let stop_flag = Arc::new(Mutex::new(false));
@@ -85,7 +87,7 @@ fn main() {
 
     match cli.filter {
         Some(f) => filter = f,
-        None => filter = "".to_string(),
+        None => filter = "udp".to_string(),
     }
 
     println!(
