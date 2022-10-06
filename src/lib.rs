@@ -164,7 +164,7 @@ impl ReportCollector {
         let mut i = 0;
 
         for (k, v) in self.report.iter() {
-            let s = format!("\t{}\t|\t{}\t|\t{}\t|\t{}\t|\t{}\t|\t{}\t|\t{}\t|\t{}\t|\n",i,k.src.to_string(),k.dst.to_string(),k.src_port.to_string(),k.dst_port.to_string(),k.protocol.to_string(),k.app_descr.to_string(),v.total_bytes.to_string()); 
+            let s = format!("\t{:>7}\t|\t{:>7}\t|\t{:>7}\t|\t{:>7}\t|\t{:>7}\t|\t{:>7}\t|\t{:>7}\t|\t{}\t|\n",i,k.src.to_string(),k.dst.to_string(),k.src_port.to_string(),k.dst_port.to_string(),k.protocol.to_string(),k.app_descr.to_string(),v.total_bytes.to_string()); 
             f.write_all(s.as_bytes());
             i+=1;
             }
