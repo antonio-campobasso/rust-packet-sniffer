@@ -48,7 +48,7 @@ enum State {
     PAUSE,
 }
 
-const DEFAULT_INTERVAL: u64 = 5;
+const DEFAULT_INTERVAL: u64 = 10;
 const DEFAULT_FILE_NAME: &str = "report.txt";
 
 fn main() {
@@ -112,7 +112,7 @@ fn main() {
             if *stop {
                 break;
             }
-            println!("Pacchetto Inserito : {:?} - {}", packet.ci, packet.cd); // DEBUG
+            //println!("Pacchetto Inserito : {:?} - {}", packet.ci, packet.cd); // DEBUG
             let mut rep = report_collector_t.lock().unwrap(); //ERR: sistema
             rep.add_packet(packet); //ERR: sistema
         }
