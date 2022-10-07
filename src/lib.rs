@@ -223,10 +223,12 @@ pub fn list_all_devices() -> Vec<Device> {
 }
 
 fn app_recognition_udp(src: u16, dst: u16) -> String {
-    if dst == 53 || src == 53 {
-
-        return "DNS message.".to_string();
-    } else if dst == 161 || src == 161 {
+    if dst == 53 {
+        return "DNS standard query.".to_string();
+    } else if src == 53 {
+        return "DNS response.".to_string();
+    }
+    else if dst == 161 || src == 161 {
         return "SNMP connection".to_string();
     } else if dst == 1900 || src == 1900 {
         return "SSDP connection".to_string();
