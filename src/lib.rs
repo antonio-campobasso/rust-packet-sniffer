@@ -18,8 +18,8 @@ use pktparse::ipv4::IPv4Header;
 //--------------------------------------
 #[derive(Eq, PartialEq, Hash, Debug)]
 pub struct ConnInfo {
-    pub src: String,
-    pub dst: String,
+    pub src: String, ///source address (IP or MAC)
+    pub dst: String, ///destination address (IP or MAC)
     pub src_port: u16,
     pub dst_port: u16,
     pub protocol: String,
@@ -222,13 +222,13 @@ pub fn list_all_devices() -> Vec<Device> {
     devices
 }
 
+///
 fn app_recognition_udp(src: u16, dst: u16) -> String {
     if dst == 53 {
         return "DNS standard query.".to_string();
     } else if src == 53 {
         return "DNS response.".to_string();
-    }
-    else if dst == 161 || src == 161 {
+    } else if dst == 161 || src == 161 {
         return "SNMP connection".to_string();
     } else if dst == 1900 || src == 1900 {
         return "SSDP connection".to_string();
@@ -238,6 +238,7 @@ fn app_recognition_udp(src: u16, dst: u16) -> String {
     "app not recognized".to_string()
 }
 
+///
 fn app_recognition_tcp(src: u16, dst: u16) -> String {
     if dst == 80 || src == 80 {
         return "HTTP connection.".to_string();
@@ -323,5 +324,6 @@ fn parse(packet: Packet) -> PacketData { // TODO errori
         panic!("Error parsing Ethernet frame.");
     }
 }
+
 
 
