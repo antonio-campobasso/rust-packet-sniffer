@@ -86,7 +86,7 @@ fn main() {
 
     match cli.filter_string {
         Some(f) => filter = f,
-        None => filter = "".to_string(),
+        None => filter = "not ip6 and not igmp".to_string(),
     }
 
     println!(
@@ -113,7 +113,7 @@ fn main() {
             if *stop {
                 break;
             }
-            println!("Pacchetto Inserito : {:?} - {}", packet.ci, packet.cd); // DEBUG
+            //println!("Pacchetto Inserito : {:?} - {}", packet.ci, packet.cd); // DEBUG
             let mut rep = report_collector_t.lock().unwrap(); //ERR: sistema
             rep.add_packet(packet); //ERR: sistema
         }

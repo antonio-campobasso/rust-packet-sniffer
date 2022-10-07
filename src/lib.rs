@@ -1,21 +1,25 @@
 use std::collections::HashMap;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Display, format, Formatter};
 use std::fs::File;
 use std::io::Write;
 use pcap::{Device, Capture, ConnectionStatus, Packet, PacketHeader, Active, Error};
 use pktparse::{ethernet, ipv4, tcp, udp, icmp, arp};
 use std::net::Ipv4Addr;
 use std::path::PathBuf;
-use std::string::ToString;
+use std::string::{ToString, self};
+use libc::{sleep, suseconds_t, time, time_t, timeval};
+use pktparse::arp::Operation;
+use pktparse::ethernet::MacAddress;
+use pktparse::icmp::{IcmpCode, parse_icmp_header};
 use pktparse::ip::IPProtocol;
 use pktparse::ipv4::IPv4Header;
 
-//TODO racchiudere le due struct ConnInfo e ConnData in un'altra struct???
+
 //--------------------------------------
 #[derive(Eq, PartialEq, Hash, Debug)]
 pub struct ConnInfo {
-    pub src: Ipv4Addr,
-    pub dst: Ipv4Addr,
+    pub src: String, ///source address (IP or MAC)
+    pub dst: String, ///destination address (IP or MAC)
     pub src_port: u16,
     pub dst_port: u16,
     pub protocol: String,
@@ -23,7 +27,7 @@ pub struct ConnInfo {
 }
 
 impl ConnInfo {
-    pub fn new(src: Ipv4Addr, dst: Ipv4Addr, src_port: u16, dst_port: u16, protocol: String, app_descr: String) -> Self {
+    pub fn new(src: String, dst: String, src_port: u16, dst_port: u16, protocol: String, app_descr: String) -> Self {
         ConnInfo {
             src,
             dst,
@@ -43,14 +47,14 @@ impl Display for ConnInfo {
 
 //---------------------------
 pub struct ConnData {
-    pub ts_first: libc::timeval,
-    pub ts_last: libc::timeval,
+    pub ts_first: timeval,
+    pub ts_last: timeval,
     pub total_bytes: usize,
 
 }
 
 impl ConnData {
-    pub fn new(ts_first: libc::timeval, ts_last: libc::timeval, total_bytes: usize) -> Self {
+    pub fn new(ts_first: timeval, ts_last: timeval, total_bytes: usize) -> Self {
         ConnData {
             ts_first,
             ts_last,
@@ -81,6 +85,16 @@ impl ToStr for IPProtocol {
     }
 }
 
+impl ToStr for MacAddress {
+    fn tostring(&self) -> String {
+        /*let s = String::from(self.0[0].to_string()+ ":" + &*self.0[1].to_string() + ":" + &*self.0[2].to_string() +":" + &*self.0[3].to_string() + ":"+ &*self.0[4].to_string() +":"+ &*self.0[5].to_string());
+        return s;*/
+        let s = format!("{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}", self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5]);
+        s
+    }
+}
+
+
 //--------------------------------------
 pub struct PacketData {
     pub ci: ConnInfo,
@@ -88,9 +102,9 @@ pub struct PacketData {
 }
 
 impl PacketData {
-    pub fn new(datagram: IPv4Header, src: u16, dst: u16, packet_header: &PacketHeader, length: usize) -> Self {
-        let ci = ConnInfo::new(datagram.source_addr, datagram.dest_addr, src, dst, datagram.protocol.tostring(), "".to_string());
-        let cd = ConnData::new(packet_header.ts, packet_header.ts, length + 38);
+    pub fn new(src_addr: String, dest_addr: String, src: u16, dst: u16, protocol: String, packet_header: &PacketHeader, length: usize, description: String) -> Self {
+        let ci = ConnInfo::new(src_addr, dest_addr, src, dst, protocol, description.to_string());
+        let cd = ConnData::new(packet_header.ts, packet_header.ts, length + 38); //+38
         Self { ci, cd }
     }
 }
@@ -99,7 +113,7 @@ impl PacketData {
 pub struct CaptureDevice {
     interface_name: String,
     filter: Option<String>,
-    cap: Capture<Active>
+    cap: Capture<Active>,
 }
 
 impl CaptureDevice {
@@ -107,7 +121,7 @@ impl CaptureDevice {
         let mut cap = Capture::from_device(interface_name.as_str()).unwrap()// TODO assume the device exists and we are authorized to open it
             .promisc(true)
             //.snaplen(65535)
-            //.buffer_size(65)//serve per vedere subito output quando inviamo pochi dati, altrimenti non vedevo efficacia filtri
+            .buffer_size(1600)//serve per vedere subito output quando inviamo pochi dati, altrimenti non vedevo efficacia filtri
             .open().unwrap();//TODO check error in opening and starting a capture
 
         println!("Sniffing process in promiscuous mode is active on interface: {}", interface_name);
@@ -121,41 +135,73 @@ impl CaptureDevice {
         Ok(parsed_p)
     }
 }
-
 //----------------------------------------------
 // TODO: Implementare il tratto drop?
+
 pub struct ReportCollector {
     report: HashMap<ConnInfo, ConnData>,
+    now: timeval,
 }
 
 impl ReportCollector {
     pub fn new() -> Self {
         ReportCollector {
             report: HashMap::new(),
+            now: timeval { tv_sec: 0, tv_usec: 0 },
         }
     }
 
     pub fn add_packet(&mut self, packet: PacketData) -> () {
-        self.report.entry(packet.ci)
-            .and_modify(|cd| {
-                cd.total_bytes += packet.cd.total_bytes + 38;
-                cd.ts_last = packet.cd.ts_first
-            })
-            .or_insert(packet.cd);
+        if self.report.is_empty() {
+            self.now = packet.cd.ts_first;
+        }
+        if packet.ci.protocol.eq("ARP") {
+            self.report.insert(packet.ci, packet.cd);
+        } else {
+            self.report.entry(packet.ci)
+                .and_modify(|cd| {
+                    cd.total_bytes += packet.cd.total_bytes + 38; //+38?
+                    cd.ts_last = packet.cd.ts_first
+                })
+                .or_insert(packet.cd);
+        }
     }
 
-    pub fn produce_report(&self) -> String {
-        //println!("Report in stampa");
-        //sleep(Duration::from_secs(2));
-        //println!("Report Stampato");
-        "rep".to_string()
+    fn sub_timeval(sot: timeval, min: timeval) -> timeval {
+        let tf1 = (sot.tv_sec * 1000000) as u64;
+        let tf2 = sot.tv_usec as u64;
+        let tf = tf1 + tf2;
+
+        let tl1 = (min.tv_sec * 1000000) as u64;
+        let tl2 = min.tv_usec as u64;
+        let tl = tl1 + tl2;
+        let time = tf - tl;
+
+        let int = time / 1000000;
+        let dec = time % 1000000;
+
+        timeval { tv_sec: int as time_t, tv_usec: dec as suseconds_t }
     }
 
     pub fn produce_report_to_file(&self, file_name: PathBuf) -> () {
-        let s = self.produce_report();
         let mut f = File::create(file_name).unwrap();
+        let header = "\n\t---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------\n\t\tn\t|\t\t\tsource\t\t|\t\tdestination\t\t|\tprotocol|\t\tts_first\t|\t\tts_last\t\t|\ttotal_bytes |\t\t\t\t\t\t\tdescription\t\t\t\t\t\t\t|\n\t---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------\n".to_string();
+        let footer = "\t---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------\n";
+        f.write_all(header.as_bytes()); // guardare il warning di clion su uso di result
+        let mut i = 0;
 
-        f.write_all(s.as_bytes());
+        for (k, v) in self.report.iter() {
+            //let s = format!("\t{:>5}\t|\t{:>15}\t|\t{:>15}\t|\t{:>7}\t|\t{:>7}\t|\t{:>7}\t|\t{:>7}.{:06}\t|\t{:>7}.{:06}\t|\t{:>7}\t|\t{:>7}\t|\n",i,k.src.to_string(),k.dst.to_string(),k.src_port.to_string(),k.dst_port.to_string(),k.protocol.to_string(),(v.ts_first.tv_sec - self.now.tv_sec), (v.ts_first.tv_usec-self.now.tv_usec),(v.ts_last.tv_sec-self.now.tv_sec),(v.ts_last.tv_usec-self.now.tv_usec), v.total_bytes.to_string(),k.app_descr.to_string());
+            let ts_first: timeval = ReportCollector::sub_timeval(v.ts_first, self.now);
+            let ts_last: timeval = ReportCollector::sub_timeval(v.ts_last, self.now);
+            //creare una string con app description e  porte
+            //let s = format!("\t{:>5}\t|\t{:>15}\t|\t{:>15}\t|\t{:>7}\t|\t{:>7}\t|\t{:>7}\t|\t{:>7}.{:06}\t|\t{:>7}.{:06}\t|\t{:>7}\t|\t{:>7}\t|\n",i,k.src.to_string(),k.dst.to_string(),k.src_port.to_string(),k.dst_port.to_string(),k.protocol.to_string(),(v.ts_first.tv_sec - self.now.tv_sec), v.ts_first.tv_usec,(v.ts_last.tv_sec-self.now.tv_sec),v.ts_last.tv_usec, v.total_bytes.to_string(),k.app_descr.to_string());
+            let s = format!("\t{:>5}\t|\t{:>18}\t|\t{:>18}\t|\t{:>7}\t|\t{:>7}.{:06}\t|\t{:>7}.{:06}\t|\t{:>12}| {:<60}\t|\n", i, k.src.to_string(), k.dst.to_string(), k.protocol.to_string(), ts_first.tv_sec, ts_first.tv_usec, ts_last.tv_sec, ts_last.tv_usec, v.total_bytes.to_string(), k.app_descr.to_string());
+            f.write_all(s.as_bytes());
+            i += 1;
+        }
+        f.write_all(footer.as_bytes()); //guardare warning su uso di REsult
+        //let s = self.report.iter().map(|(k,v)|{k.src.to_string() + k.dst.to_string() + k.src_port.to_string() + k.dst_port.to_string() + k.protocol.to_string() + k.app_descr.to_string() + v.ts_first.to_string() + v.ts_last.to_string() + v.total_bytes.to_string()}).for_each(|x|{f.write_all((header + x).as_byte())});
     }
 }
 
@@ -176,107 +222,108 @@ pub fn list_all_devices() -> Vec<Device> {
     devices
 }
 
-fn app_recognition_udp(src: u16, dst: u16) -> () {
-    if dst == 53 || src == 53 {
-        // println!("DNS message.");
+///
+fn app_recognition_udp(src: u16, dst: u16) -> String {
+    if dst == 53 {
+        return "DNS standard query.".to_string();
+    } else if src == 53 {
+        return "DNS response.".to_string();
     } else if dst == 161 || src == 161 {
-        //println!("SNMP message.");
-    }
-}
-
-fn app_recognition_tcp(src: u16, dst: u16) -> () {
-    if dst == 80 || src == 80 {
-        //println!("HTTP message.");
+        return "SNMP connection".to_string();
+    } else if dst == 1900 || src == 1900 {
+        return "SSDP connection".to_string();
     } else if dst == 443 || src == 443 {
-        //println!("HTTPS message.");
-    } else if dst == 22 || src == 22 {
-        //println!("SSH message.");
+        return "Transmission encrypted over UDP".to_string();
     }
+    "app not recognized".to_string()
 }
 
-/// Parse the packet
-fn parse(packet: Packet) -> PacketData { // TODO errori e app recognition
+///
+fn app_recognition_tcp(src: u16, dst: u16) -> String {
+    if dst == 80 || src == 80 {
+        return "HTTP connection.".to_string();
+    } else if dst == 443 || src == 443 {
+        return "HTTP over TLS connection".to_string();
+    } else if dst == 22 || src == 22 {
+        return "SSH connection".to_string();
+    }
+    "app not recognized".to_string()
+}
+
+fn parse(packet: Packet) -> PacketData { // TODO errori
     if let Ok((payload_e, frame)) = ethernet::parse_ethernet_frame(packet.data) {
-        //println!("{}", payload_e.len()); verifica di bytes effettivi trasmessi --> controllo payload del frame e aggiungo 38 (heaeder eth)
         match frame.ethertype {
             ethernet::EtherType::IPv4 => {
                 if let Ok((payload_i, datagram)) = ipv4::parse_ipv4_header(payload_e) {
                     match datagram.protocol {
                         IPProtocol::TCP => {
                             if let Ok((_payload_t, segment)) = tcp::parse_tcp_header(payload_i) {
-                                //reporting diventa add_packet, anziché passare tutti questi dati, creiamo una struct e la passiamo
-                                //reporting(report, datagram, segment.source_port, segment.dest_port, packet.header, payload_e.len());
-                                app_recognition_tcp(segment.source_port, segment.dest_port);
-                                PacketData::new(datagram,segment.source_port,segment.dest_port,packet.header,payload_e.len())
-                                //println!("{:?}", segment);
+                                let s = format!("{} -> {} {}", segment.source_port, segment.dest_port, app_recognition_tcp(segment.source_port, segment.dest_port));
+                                PacketData::new(datagram.source_addr.to_string(), datagram.dest_addr.to_string(), segment.source_port, segment.dest_port, datagram.protocol.tostring(), packet.header, payload_e.len(), s) //aggiungere app description
                             } else {
-                                //println!("Error parsing TCP segment.");
-                                panic!();
+                                panic!("Error parsing TCP segment.");
                             }
                         }
                         IPProtocol::UDP => {
                             if let Ok((_payload_u, udp_datagram)) = udp::parse_udp_header(payload_i) {
-                                //reporting(report, datagram, udp_datagram.source_port, udp_datagram.dest_port, packet.header, payload_e.len());
-                                app_recognition_udp(udp_datagram.source_port, udp_datagram.dest_port);
-                                PacketData::new(datagram,udp_datagram.source_port,udp_datagram.dest_port,packet.header,payload_e.len())
-                                //println!("{:?}", udp_datagram);
+                                let s = format!("{} -> {} {}", udp_datagram.source_port, udp_datagram.dest_port, app_recognition_udp(udp_datagram.source_port, udp_datagram.dest_port));
+                                PacketData::new(datagram.source_addr.to_string(), datagram.dest_addr.to_string(), udp_datagram.source_port, udp_datagram.dest_port, datagram.protocol.tostring(), packet.header, payload_e.len(), s)
                             } else {
-                                //println!("Error parsing UDP datagram.");
-                                panic!();
+                                panic!("Error parsing UDP datagram.");
                             }
                         }
 
-                        /*IPProtocol::ICMP => { //TODO
-                            if let Ok((_payload, _packet)) = icmp::parse_icmp_header(payload_i) {
-                                // println!("{:?}", _packet);
+                        IPProtocol::ICMP => {
+                            if let Ok((_payload, icmp_header)) = parse_icmp_header(payload_i) {
+                                if icmp_header.code == IcmpCode::EchoRequest {
+                                    let s = format!("Echo (ping) request");
+                                    PacketData::new(datagram.source_addr.to_string(), datagram.dest_addr.to_string(), 0, 0, datagram.protocol.tostring(), packet.header, payload_e.len(), s)
+                                } else if icmp_header.code == IcmpCode::EchoReply {
+                                    let s = format!("Echo (ping) reply");
+                                    PacketData::new(datagram.source_addr.to_string(), datagram.dest_addr.to_string(), 0, 0, datagram.protocol.tostring(), packet.header, payload_e.len(), s)
+                                } else {
+                                    let s = format!("Destination unreachable");
+                                    PacketData::new(datagram.source_addr.to_string(), datagram.dest_addr.to_string(), 0, 0, datagram.protocol.tostring(), packet.header, payload_e.len(), s)
+                                }
                             } else {
-                                println!("Error parsing ICMP packet.");
+                                panic!("Error parsing ICMP packet.");
                             }
-                        }*/
-                        _ => { panic!()}
-                            //println!("L4 protocol not supported") }
+                        }
+                        IPProtocol::ICMP6 => {
+                            panic!("ICMP6 not supported");
+                        }
+                        IPProtocol::IGMP => {
+                            panic!("IGMP not supported");
+                        }
+                        _ => { panic!("L4 protocol not supported") }
                     }
                 } else {
-                    //println!("Error parsing IP datagram.");
-                    panic!();
+                    panic!("Error parsing IPv4 datagram.");
                 }
             }
-            //TODO ethernet::EtherType::IPv6 => {
-            // }
-            /*
-            ethernet::EtherType::ARP => { //TODO da capire se inserire o meno nel report
-                if let Ok((_payload, _packet)) = arp::parse_arp_pkt(payload_e) {
-                    //println!("{:x?}", _packet);
-                    //print_hashmap(report);
+            ethernet::EtherType::IPv6 => {
+                panic!(" IPv6 datagram not supported");
+            }
+
+            ethernet::EtherType::ARP => {
+                if let Ok((_payload, arp_header)) = arp::parse_arp_pkt(payload_e) {
+                    if arp_header.operation == Operation::Request {
+                        let s = format!("Request - Who has {} ? Tell {}", arp_header.dest_addr, arp_header.src_addr);
+                        PacketData::new(frame.source_mac.tostring(), frame.dest_mac.tostring(), 0, 0, "ARP".to_string(), packet.header, payload_e.len(), s) //aggiungere app description
+                    } else {
+                        let s = format!("Reply - {} is at {}", arp_header.dest_addr, arp_header.src_mac.tostring());
+                        PacketData::new(frame.source_mac.tostring(), frame.dest_mac.tostring(), 0, 0, "ARP".to_string(), packet.header, payload_e.len(), s) //aggiungere app description
+                    }
                 } else {
-                    println!("Error parsing ARP packet.");
+                    panic!("Error parsing ARP packet.")
                 }
-            }*/
-            _ => {
-                //println!("L3 protocol not supported");
-                panic!()
             }
+            _ => { panic!("L3 protocol not supported") }
         }
     } else {
-        //println!("Error parsing Ethernet frame.");
-        panic!();
+        panic!("Error parsing Ethernet frame.");
     }
 }
-
-//service function to print the hashmap
-/*fn print_hashmap(hm: &HashMap<ConnInfo, ConnData>) -> () {
-    let mut i = 1;
-
-    for (key, value) in hm {
-        println!("{}|{}:{}", i, key, value);
-        i += 1;
-    }
-}*/
-
-
-
-
-
 
 
 
