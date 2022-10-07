@@ -54,15 +54,13 @@ const DEFAULT_FILE_NAME: &str = "report.txt";
 fn main() {
     let cli = Args::parse();
 
-    let network_interface ;
-    let time_interval: u64 ;
-    let output_file ;
+    let network_interface;
+    let time_interval: u64;
+    let output_file;
     let filter;
-    //let now: libc::timeval = timeval { tv_sec: 0, tv_usec: 0 };
 
     let mut threads = vec![];
 
-    //let report_collector = Arc::new(Mutex::new(ReportCollector::new(now)));
     let report_collector = Arc::new(Mutex::new(ReportCollector::new()));
     let prog_state = Arc::new((Mutex::new(State::RUN), Condvar::new()));
     let stop_flag = Arc::new(Mutex::new(false));
@@ -87,7 +85,7 @@ fn main() {
 
     match cli.filter {
         Some(f) => filter = f,
-        None => filter = "udp".to_string(),
+        None => filter = "not ip6 and not igmp".to_string(),
     }
 
     println!(
@@ -117,7 +115,6 @@ fn main() {
             println!("Pacchetto Inserito : {:?} - {}", packet.ci, packet.cd); // DEBUG
             let mut rep = report_collector_t.lock().unwrap(); //ERR: sistema
             rep.add_packet(packet); //ERR: sistema
-
         }
         println!("Capture connection terminated.");
     }));
