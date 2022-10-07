@@ -194,6 +194,7 @@ fn app_recognition_tcp(src: u16, dst: u16) -> () {
     }
 }
 
+/// Parse the packet
 fn parse(packet: Packet) -> PacketData { // TODO errori e app recognition
     if let Ok((payload_e, frame)) = ethernet::parse_ethernet_frame(packet.data) {
         //println!("{}", payload_e.len()); verifica di bytes effettivi trasmessi --> controllo payload del frame e aggiungo 38 (heaeder eth)

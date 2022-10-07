@@ -1,26 +1,21 @@
 use packet_sniffer::*;
 
 use std::{
-    collections::HashMap,
-    fs::File,
-    io::{stdin, Write},
-    path::PathBuf,
+    io::stdin,
+    path::{Path, PathBuf},
     str::FromStr,
     sync::{Arc, Condvar, Mutex},
     thread::{self, sleep},
     time::Duration,
 };
 
-// TODO: introduci possibilità di acquisizione raw? stampa pacchetto per pacchetto
-
-use clap::{Error, Parser};
+use clap::Parser;
 
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
 
-// NOTE: considera se implementare guided mode
 struct Args {
-    /// Enables guided mode, where the parameter are asked by the program.
+    /// Enables guided mode
     #[clap(short, long, action, value_name = "guided mode")]
     guided: bool,
 
@@ -32,15 +27,14 @@ struct Args {
     #[clap(value_parser, value_name = "time interval")]
     time_interval: Option<u64>,
 
-    /// Name of the file in which the report will be written. Defaults to "report.txt".
+    /// Path of the file in which the report will be written. Defaults to "./report.txt".
     #[clap(value_parser, value_name = "output file")]
-    output_file: Option<PathBuf>,
+    report_path: Option<String>,
 
     /// Filter to apply to sniffed packets
     #[clap(short, long, value_parser, value_name = "filter")]
-    filter: Option<String>,
+    filter_string: Option<String>,
 }
-
 
 #[derive(PartialEq)]
 enum State {
@@ -48,15 +42,14 @@ enum State {
     PAUSE,
 }
 
-const DEFAULT_INTERVAL: u64 = 10;
-const DEFAULT_FILE_NAME: &str = "report.txt";
+const DEFAULT_TIME_INTERVAL: u64 = 10;
+const DEFAULT_REPORT_PATH: &str = "/report.txt";
+const DEFAULT_FILTER_STRING: &str = "";
 
 fn main() {
-    let cli = Args::parse();
-
-    let network_interface ;
-    let time_interval: u64 ;
-    let output_file ;
+    let network_interface;
+    let time_interval: u64;
+    let report_path: PathBuf;
     let filter;
 
     let mut threads = vec![];
@@ -65,6 +58,10 @@ fn main() {
     let prog_state = Arc::new((Mutex::new(State::RUN), Condvar::new()));
     let stop_flag = Arc::new(Mutex::new(false));
     // NOTE: non posso usare STOP come stato perchè altrimenti si rischia il deadlock
+
+    // Cli management
+    let cli = Args::parse();
+
 
     //list_all_devices()
     // TODO: modalità per inserire i valori uno ad uno. Vale la pena? magari impostare solo valori default senza guided mode?
@@ -75,15 +72,19 @@ fn main() {
 
     match cli.time_interval {
         Some(interval) => time_interval = interval,
-        None => time_interval = DEFAULT_INTERVAL, // magari definisci in una costante
+        None => time_interval = DEFAULT_TIME_INTERVAL, // magari definisci in una costante
     }
 
-    match cli.output_file {
-        Some(file) => output_file = file,
-        None => output_file = PathBuf::from_str(DEFAULT_FILE_NAME).unwrap(), // Da gestire l'errore del file??
+    let aaaa = PathBuf::from(cli.report_path.clone().unwrap()).exists();
+
+    println!("{}", aaaa);
+
+    match cli.report_path {
+        Some(file) => report_path = PathBuf::from(file),
+        None => report_path = PathBuf::from(DEFAULT_REPORT_PATH), // Da gestire l'errore del file??
     }
 
-    match cli.filter {
+    match cli.filter_string {
         Some(f) => filter = f,
         None => filter = "".to_string(),
     }
@@ -92,7 +93,7 @@ fn main() {
         "Args: {}, {}, {}",
         network_interface,
         time_interval,
-        output_file.to_str().unwrap()
+        report_path.to_str().unwrap()
     ); // DEBUG
 
     let report_collector_t = report_collector.clone();
@@ -115,7 +116,6 @@ fn main() {
             println!("Pacchetto Inserito : {:?} - {}", packet.ci, packet.cd); // DEBUG
             let mut rep = report_collector_t.lock().unwrap(); //ERR: sistema
             rep.add_packet(packet); //ERR: sistema
-
         }
         println!("Capture connection terminated.");
     }));
@@ -144,7 +144,7 @@ fn main() {
             }
 
             let rep = report_collector_t.lock().unwrap();
-            rep.produce_report_to_file(output_file.clone()); // DEBUG
+            rep.produce_report_to_file(PathBuf::from(report_path.clone())); // DEBUG
         }
         println!("Report manager terminated"); //DEBUG
     }));
@@ -199,4 +199,60 @@ fn main() {
     for t in threads {
         t.join().expect("TT"); //ERR: sistema
     }
+}
+
+fn command_line_acquisition(
+    network_interface: &mut String,
+    time_interval: &mut u64,
+    report_path: &mut PathBuf,
+    filter: &mut String,
+    guided: bool,
+) -> Result<(), String> {
+    // TODO: da cambiare
+    let cli = Args::parse();
+
+    if guided {
+        // TODO: modalità per inserire i valori uno ad uno. Vale la pena? magari impostare solo valori default senza guided mode?
+    }
+
+    match cli.network_interface {
+        Some(interface) => *network_interface = interface,
+        None => {
+            *network_interface = match list_all_devices().first() {
+                Some(first_device) => first_device.name.clone(),
+                None => return Err("No device detected to perform sniffing operation".to_string()),
+            }
+        }
+    }
+
+    match cli.time_interval {
+        Some(interval) => *time_interval = interval,
+        None => *time_interval = DEFAULT_TIME_INTERVAL,
+    }
+
+    match cli.report_path {
+        Some(path) => {
+            let temp_path = PathBuf::from(path);
+            
+            // 
+            
+
+            *report_path = temp_path
+        }
+        None => *report_path = PathBuf::from_str(DEFAULT_REPORT_PATH).unwrap(), // In teoria nessun problema finchè path di default
+    }
+
+    match cli.filter_string {
+        Some(f) => *filter = f,
+        None => *filter = "".to_string(),
+    }
+
+    println!(
+        "Args: {}, {}, {}",
+        network_interface,
+        time_interval,
+        report_path.to_str().unwrap()
+    ); // DEBUG
+
+    Ok(())
 }
