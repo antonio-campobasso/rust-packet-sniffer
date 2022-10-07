@@ -1,7 +1,10 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 fn main() {
     println!("Fuck world!");
 =======
+=======
+>>>>>>> centola
 use packet_sniffer::*;
 
 use std::{
@@ -50,7 +53,10 @@ struct Args {
 enum State {
     RUN,
     PAUSE,
+<<<<<<< HEAD
 >>>>>>> simone
+=======
+>>>>>>> centola
 }
 
 const DEFAULT_INTERVAL: u64 = 10;
@@ -120,6 +126,11 @@ fn main() {
             //println!("Pacchetto Inserito : {:?} - {}", packet.ci, packet.cd); // DEBUG
             let mut rep = report_collector_t.lock().unwrap(); //ERR: sistema
             rep.add_packet(packet); //ERR: sistema
+<<<<<<< HEAD
+=======
+           
+
+>>>>>>> centola
         }
         println!("Capture connection terminated.");
     }));
