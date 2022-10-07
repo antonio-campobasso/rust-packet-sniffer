@@ -235,7 +235,7 @@ fn app_recognition_udp(src: u16, dst: u16) -> String {
     } else if dst == 443 || src == 443 {
         return "Transmission encrypted over UDP".to_string();
     }
-    "app not supported".to_string()
+    "app not recognized".to_string()
 }
 
 fn app_recognition_tcp(src: u16, dst: u16) -> String {
@@ -246,7 +246,7 @@ fn app_recognition_tcp(src: u16, dst: u16) -> String {
     } else if dst == 22 || src == 22 {
         return "SSH connection".to_string();
     }
-    "app not supported".to_string()
+    "app not recognized".to_string()
 }
 
 fn parse(packet: Packet) -> PacketData { // TODO errori
