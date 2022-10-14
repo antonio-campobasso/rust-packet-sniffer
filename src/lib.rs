@@ -1,32 +1,26 @@
-use std::collections::HashMap;
-use std::fmt::{Display, format, Formatter};
-use std::fs::File;
-use std::io::Write;
-use pcap::{Device, Capture, ConnectionStatus, Packet, PacketHeader, Active, Error};
-use pktparse::{ethernet, ipv4, tcp, udp, icmp, arp};
-use std::net::Ipv4Addr;
-use std::path::PathBuf;
-use std::string::{ToString, self};
-<<<<<<< HEAD
 use libc::{sleep, suseconds_t, time, time_t, timeval};
+use pcap::{Active, Capture, ConnectionStatus, Device, Error, Packet, PacketHeader};
 use pktparse::arp::Operation;
 use pktparse::ethernet::MacAddress;
-use pktparse::icmp::{IcmpCode, parse_icmp_header};
-=======
->>>>>>> centola
+use pktparse::icmp::{parse_icmp_header, IcmpCode};
 use pktparse::ip::IPProtocol;
 use pktparse::ipv4::IPv4Header;
+use pktparse::{arp, ethernet, icmp, ipv4, tcp, udp};
+use std::collections::HashMap;
+use std::fmt::{format, Display, Formatter};
+use std::fs::File;
+use std::io::Write;
+use std::net::Ipv4Addr;
+use std::path::PathBuf;
+use std::string::{self, ToString};
 
-
-<<<<<<< HEAD
-=======
-//TODO racchiudere le due struct ConnInfo e ConnData in un'altra struct???
->>>>>>> centola
 //--------------------------------------
 #[derive(Eq, PartialEq, Hash, Debug)]
 pub struct ConnInfo {
-    pub src: String, ///source address (IP or MAC)
-    pub dst: String, ///destination address (IP or MAC)
+    pub src: String,
+    ///source address (IP or MAC)
+    pub dst: String,
+    ///destination address (IP or MAC)
     pub src_port: u16,
     pub dst_port: u16,
     pub protocol: String,
@@ -34,7 +28,14 @@ pub struct ConnInfo {
 }
 
 impl ConnInfo {
-    pub fn new(src: String, dst: String, src_port: u16, dst_port: u16, protocol: String, app_descr: String) -> Self {
+    pub fn new(
+        src: String,
+        dst: String,
+        src_port: u16,
+        dst_port: u16,
+        protocol: String,
+        app_descr: String,
+    ) -> Self {
         ConnInfo {
             src,
             dst,
@@ -48,7 +49,11 @@ impl ConnInfo {
 
 impl Display for ConnInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({}|{}|{}|{}|{}|{})", self.src, self.dst, self.protocol, self.src_port, self.dst_port, self.app_descr)
+        write!(
+            f,
+            "({}|{}|{}|{}|{}|{})",
+            self.src, self.dst, self.protocol, self.src_port, self.dst_port, self.app_descr
+        )
     }
 }
 
@@ -57,7 +62,6 @@ pub struct ConnData {
     pub ts_first: timeval,
     pub ts_last: timeval,
     pub total_bytes: usize,
-
 }
 
 impl ConnData {
@@ -72,7 +76,15 @@ impl ConnData {
 
 impl Display for ConnData {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "(tot_bytes:{} ts_first:{}.{:06} ts_last:{}.{:06})", self.total_bytes, self.ts_first.tv_sec, self.ts_first.tv_usec, self.ts_last.tv_sec, self.ts_last.tv_usec)
+        write!(
+            f,
+            "(tot_bytes:{} ts_first:{}.{:06} ts_last:{}.{:06})",
+            self.total_bytes,
+            self.ts_first.tv_sec,
+            self.ts_first.tv_usec,
+            self.ts_last.tv_sec,
+            self.ts_last.tv_usec
+        )
     }
 }
 
@@ -84,10 +96,10 @@ pub trait ToStr {
 impl ToStr for IPProtocol {
     fn tostring(&self) -> String {
         match self {
-            IPProtocol::ICMP => { "ICMP".to_string() }
-            IPProtocol::UDP => { "UDP".to_string() }
-            IPProtocol::TCP => { "TCP".to_string() }
-            _ => { "".to_string() }
+            IPProtocol::ICMP => "ICMP".to_string(),
+            IPProtocol::UDP => "UDP".to_string(),
+            IPProtocol::TCP => "TCP".to_string(),
+            _ => "".to_string(),
         }
     }
 }
@@ -96,11 +108,13 @@ impl ToStr for MacAddress {
     fn tostring(&self) -> String {
         /*let s = String::from(self.0[0].to_string()+ ":" + &*self.0[1].to_string() + ":" + &*self.0[2].to_string() +":" + &*self.0[3].to_string() + ":"+ &*self.0[4].to_string() +":"+ &*self.0[5].to_string());
         return s;*/
-        let s = format!("{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}", self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5]);
+        let s = format!(
+            "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+            self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5]
+        );
         s
     }
 }
-
 
 //--------------------------------------
 pub struct PacketData {
@@ -109,8 +123,24 @@ pub struct PacketData {
 }
 
 impl PacketData {
-    pub fn new(src_addr: String, dest_addr: String, src: u16, dst: u16, protocol: String, packet_header: &PacketHeader, length: usize, description: String) -> Self {
-        let ci = ConnInfo::new(src_addr, dest_addr, src, dst, protocol, description.to_string());
+    pub fn new(
+        src_addr: String,
+        dest_addr: String,
+        src: u16,
+        dst: u16,
+        protocol: String,
+        packet_header: &PacketHeader,
+        length: usize,
+        description: String,
+    ) -> Self {
+        let ci = ConnInfo::new(
+            src_addr,
+            dest_addr,
+            src,
+            dst,
+            protocol,
+            description.to_string(),
+        );
         let cd = ConnData::new(packet_header.ts, packet_header.ts, length + 38); //+38
         Self { ci, cd }
     }
@@ -125,15 +155,21 @@ pub struct CaptureDevice {
 
 impl CaptureDevice {
     pub fn new(interface_name: String, filter: Option<String>) -> Self {
-        let mut cap = Capture::from_device(interface_name.as_str()).unwrap()// TODO assume the device exists and we are authorized to open it
+        let mut cap = Capture::from_device(interface_name.as_str())
+            .unwrap() // TODO assume the device exists and we are authorized to open it
             .promisc(true)
             //.snaplen(65535)
-            .buffer_size(1600)//serve per vedere subito output quando inviamo pochi dati, altrimenti non vedevo efficacia filtri
-            .open().unwrap();//TODO check error in opening and starting a capture
+            .buffer_size(1600) //serve per vedere subito output quando inviamo pochi dati, altrimenti non vedevo efficacia filtri
+            .open()
+            .unwrap(); //TODO check error in opening and starting a capture
 
         //println!("Sniffing process in promiscuous mode is active on interface: {}", interface_name);
         cap.filter(&filter.as_ref().unwrap(), true).unwrap();
-        Self { interface_name, filter, cap }
+        Self {
+            interface_name,
+            filter,
+            cap,
+        }
     }
 
     pub fn next_packet(&mut self) -> Result<PacketData, Error> {
@@ -150,12 +186,14 @@ pub struct ReportCollector {
     now: timeval,
 }
 
-
 impl ReportCollector {
     pub fn new() -> Self {
         ReportCollector {
             report: HashMap::new(),
-            now: timeval { tv_sec: 0, tv_usec: 0 },
+            now: timeval {
+                tv_sec: 0,
+                tv_usec: 0,
+            },
         }
     }
 
@@ -166,7 +204,8 @@ impl ReportCollector {
         if packet.ci.protocol.eq("ARP") {
             self.report.insert(packet.ci, packet.cd);
         } else {
-            self.report.entry(packet.ci)
+            self.report
+                .entry(packet.ci)
                 .and_modify(|cd| {
                     cd.total_bytes += packet.cd.total_bytes + 38; //+38?
                     cd.ts_last = packet.cd.ts_first
@@ -175,7 +214,6 @@ impl ReportCollector {
         }
     }
 
-<<<<<<< HEAD
     fn sub_timeval(sot: timeval, min: timeval) -> timeval {
         let tf1 = (sot.tv_sec * 1000000) as u64;
         let tf2 = sot.tv_usec as u64;
@@ -189,7 +227,10 @@ impl ReportCollector {
         let int = time / 1000000;
         let dec = time % 1000000;
 
-        timeval { tv_sec: int as time_t, tv_usec: dec as suseconds_t }
+        timeval {
+            tv_sec: int as time_t,
+            tv_usec: dec as suseconds_t,
+        }
     }
 
     pub fn produce_report_to_file(&self, file_name: PathBuf) -> () {
@@ -210,40 +251,14 @@ impl ReportCollector {
             i += 1;
         }
         f.write_all(footer.as_bytes()); //guardare warning su uso di REsult
-=======
-    /*pub fn produce_report(&self) -> String {
-        //println!("Report in stampa");
-        //sleep(Duration::from_secs(2));
-        //println!("Report Stampato");
-        "res".to_string;
-    }*/
-
-
-    pub fn produce_report_to_file(&self, file_name: PathBuf) -> () {
-
-        let mut f = File::create(file_name).unwrap();
-        let header = "\n\t------------------------------------------------------------------------------------\nn\t|\tsorce\t|\tdest \t|\tsrc_p\t|\tdst_p\t|\tprot \t|\tdescr\t|\ttot_b\t|\n\t------------------------------------------------------------------------------------\n".to_string();
-        let footer = "\t------------------------------------------------------------------------------------\n";
-        f.write_all(header.as_bytes());
-        let mut i = 0;
-
-        for (k, v) in self.report.iter() {
-            let s = format!("\t{:>7}\t|\t{:>7}\t|\t{:>7}\t|\t{:>7}\t|\t{:>7}\t|\t{:>7}\t|\t{:>7}\t|\t{}\t|\n",i,k.src.to_string(),k.dst.to_string(),k.src_port.to_string(),k.dst_port.to_string(),k.protocol.to_string(),k.app_descr.to_string(),v.total_bytes.to_string()); 
-            f.write_all(s.as_bytes());
-            i+=1;
-            }
-        f.write_all(footer.as_bytes());
->>>>>>> centola
-        //let s = self.report.iter().map(|(k,v)|{k.src.to_string() + k.dst.to_string() + k.src_port.to_string() + k.dst_port.to_string() + k.protocol.to_string() + k.app_descr.to_string() + v.ts_first.to_string() + v.ts_last.to_string() + v.total_bytes.to_string()}).for_each(|x|{f.write_all((header + x).as_byte())});
     }
 }
-
 //----------------------------------------------------------
 // list devices
 pub fn list_all_devices() -> Vec<Device> {
     let devices = Device::list().unwrap();
 
-/*     for d in &devices {
+    /*     for d in &devices {
         if d.flags.connection_status.eq(&ConnectionStatus::Connected) && d.addresses.len() > 1 {
             println!("{:?}: {:?} - IP Net interface: {:?}", d.name, d.flags.connection_status, d.addresses[1].addr);
         } else if d.flags.connection_status.eq(&ConnectionStatus::Connected) && d.addresses.len() < 2 {
@@ -252,7 +267,7 @@ pub fn list_all_devices() -> Vec<Device> {
             println!("{:?}: {:?}", d.name, d.flags.connection_status);
         }
     } */
-    devices
+    devices.iter().filter(|device| device.flags.connection_status == ConnectionStatus::Connected).collect::<Vec<Device>>()
 }
 
 ///
@@ -283,7 +298,8 @@ fn app_recognition_tcp(src: u16, dst: u16) -> String {
     "app not recognized".to_string()
 }
 
-fn parse(packet: Packet) -> PacketData { // TODO errori
+fn parse(packet: Packet) -> PacketData {
+    // TODO errori
     if let Ok((payload_e, frame)) = ethernet::parse_ethernet_frame(packet.data) {
         match frame.ethertype {
             ethernet::EtherType::IPv4 => {
@@ -291,16 +307,48 @@ fn parse(packet: Packet) -> PacketData { // TODO errori
                     match datagram.protocol {
                         IPProtocol::TCP => {
                             if let Ok((_payload_t, segment)) = tcp::parse_tcp_header(payload_i) {
-                                let s = format!("{} -> {} {}", segment.source_port, segment.dest_port, app_recognition_tcp(segment.source_port, segment.dest_port));
-                                PacketData::new(datagram.source_addr.to_string(), datagram.dest_addr.to_string(), segment.source_port, segment.dest_port, datagram.protocol.tostring(), packet.header, payload_e.len(), s) //aggiungere app description
+                                let s = format!(
+                                    "{} -> {} {}",
+                                    segment.source_port,
+                                    segment.dest_port,
+                                    app_recognition_tcp(segment.source_port, segment.dest_port)
+                                );
+                                PacketData::new(
+                                    datagram.source_addr.to_string(),
+                                    datagram.dest_addr.to_string(),
+                                    segment.source_port,
+                                    segment.dest_port,
+                                    datagram.protocol.tostring(),
+                                    packet.header,
+                                    payload_e.len(),
+                                    s,
+                                ) //aggiungere app description
                             } else {
                                 panic!("Error parsing TCP segment.");
                             }
                         }
                         IPProtocol::UDP => {
-                            if let Ok((_payload_u, udp_datagram)) = udp::parse_udp_header(payload_i) {
-                                let s = format!("{} -> {} {}", udp_datagram.source_port, udp_datagram.dest_port, app_recognition_udp(udp_datagram.source_port, udp_datagram.dest_port));
-                                PacketData::new(datagram.source_addr.to_string(), datagram.dest_addr.to_string(), udp_datagram.source_port, udp_datagram.dest_port, datagram.protocol.tostring(), packet.header, payload_e.len(), s)
+                            if let Ok((_payload_u, udp_datagram)) = udp::parse_udp_header(payload_i)
+                            {
+                                let s = format!(
+                                    "{} -> {} {}",
+                                    udp_datagram.source_port,
+                                    udp_datagram.dest_port,
+                                    app_recognition_udp(
+                                        udp_datagram.source_port,
+                                        udp_datagram.dest_port
+                                    )
+                                );
+                                PacketData::new(
+                                    datagram.source_addr.to_string(),
+                                    datagram.dest_addr.to_string(),
+                                    udp_datagram.source_port,
+                                    udp_datagram.dest_port,
+                                    datagram.protocol.tostring(),
+                                    packet.header,
+                                    payload_e.len(),
+                                    s,
+                                )
                             } else {
                                 panic!("Error parsing UDP datagram.");
                             }
@@ -310,13 +358,40 @@ fn parse(packet: Packet) -> PacketData { // TODO errori
                             if let Ok((_payload, icmp_header)) = parse_icmp_header(payload_i) {
                                 if icmp_header.code == IcmpCode::EchoRequest {
                                     let s = format!("Echo (ping) request");
-                                    PacketData::new(datagram.source_addr.to_string(), datagram.dest_addr.to_string(), 0, 0, datagram.protocol.tostring(), packet.header, payload_e.len(), s)
+                                    PacketData::new(
+                                        datagram.source_addr.to_string(),
+                                        datagram.dest_addr.to_string(),
+                                        0,
+                                        0,
+                                        datagram.protocol.tostring(),
+                                        packet.header,
+                                        payload_e.len(),
+                                        s,
+                                    )
                                 } else if icmp_header.code == IcmpCode::EchoReply {
                                     let s = format!("Echo (ping) reply");
-                                    PacketData::new(datagram.source_addr.to_string(), datagram.dest_addr.to_string(), 0, 0, datagram.protocol.tostring(), packet.header, payload_e.len(), s)
+                                    PacketData::new(
+                                        datagram.source_addr.to_string(),
+                                        datagram.dest_addr.to_string(),
+                                        0,
+                                        0,
+                                        datagram.protocol.tostring(),
+                                        packet.header,
+                                        payload_e.len(),
+                                        s,
+                                    )
                                 } else {
                                     let s = format!("Destination unreachable");
-                                    PacketData::new(datagram.source_addr.to_string(), datagram.dest_addr.to_string(), 0, 0, datagram.protocol.tostring(), packet.header, payload_e.len(), s)
+                                    PacketData::new(
+                                        datagram.source_addr.to_string(),
+                                        datagram.dest_addr.to_string(),
+                                        0,
+                                        0,
+                                        datagram.protocol.tostring(),
+                                        packet.header,
+                                        payload_e.len(),
+                                        s,
+                                    )
                                 }
                             } else {
                                 panic!("Error parsing ICMP packet.");
@@ -328,7 +403,9 @@ fn parse(packet: Packet) -> PacketData { // TODO errori
                         IPProtocol::IGMP => {
                             panic!("IGMP not supported");
                         }
-                        _ => { panic!("L4 protocol not supported") }
+                        _ => {
+                            panic!("L4 protocol not supported")
+                        }
                     }
                 } else {
                     panic!("Error parsing IPv4 datagram.");
@@ -341,22 +418,46 @@ fn parse(packet: Packet) -> PacketData { // TODO errori
             ethernet::EtherType::ARP => {
                 if let Ok((_payload, arp_header)) = arp::parse_arp_pkt(payload_e) {
                     if arp_header.operation == Operation::Request {
-                        let s = format!("Request - Who has {} ? Tell {}", arp_header.dest_addr, arp_header.src_addr);
-                        PacketData::new(frame.source_mac.tostring(), frame.dest_mac.tostring(), 0, 0, "ARP".to_string(), packet.header, payload_e.len(), s) //aggiungere app description
+                        let s = format!(
+                            "Request - Who has {} ? Tell {}",
+                            arp_header.dest_addr, arp_header.src_addr
+                        );
+                        PacketData::new(
+                            frame.source_mac.tostring(),
+                            frame.dest_mac.tostring(),
+                            0,
+                            0,
+                            "ARP".to_string(),
+                            packet.header,
+                            payload_e.len(),
+                            s,
+                        ) //aggiungere app description
                     } else {
-                        let s = format!("Reply - {} is at {}", arp_header.dest_addr, arp_header.src_mac.tostring());
-                        PacketData::new(frame.source_mac.tostring(), frame.dest_mac.tostring(), 0, 0, "ARP".to_string(), packet.header, payload_e.len(), s) //aggiungere app description
+                        let s = format!(
+                            "Reply - {} is at {}",
+                            arp_header.dest_addr,
+                            arp_header.src_mac.tostring()
+                        );
+                        PacketData::new(
+                            frame.source_mac.tostring(),
+                            frame.dest_mac.tostring(),
+                            0,
+                            0,
+                            "ARP".to_string(),
+                            packet.header,
+                            payload_e.len(),
+                            s,
+                        ) //aggiungere app description
                     }
                 } else {
                     panic!("Error parsing ARP packet.")
                 }
             }
-            _ => { panic!("L3 protocol not supported") }
+            _ => {
+                panic!("L3 protocol not supported")
+            }
         }
     } else {
         panic!("Error parsing Ethernet frame.");
     }
 }
-
-
-

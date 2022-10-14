@@ -223,7 +223,6 @@ fn command_line_acquisition(
         println!("Select network interface from the following: ");
         devices
             .iter()
-            .filter(|device| device.flags.connection_status == ConnectionStatus::Connected) // da cambiare, non dovrei vedere Device o ConnectionStatus
             .for_each(|device| println!("- {}", device.name));
 
         if let Err(_) = stdin().read_line(&mut buffer) {
