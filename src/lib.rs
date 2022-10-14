@@ -124,7 +124,7 @@ impl CaptureDevice {
             .buffer_size(1600)//serve per vedere subito output quando inviamo pochi dati, altrimenti non vedevo efficacia filtri
             .open().unwrap();//TODO check error in opening and starting a capture
 
-        println!("Sniffing process in promiscuous mode is active on interface: {}", interface_name);
+        //println!("Sniffing process in promiscuous mode is active on interface: {}", interface_name);
         cap.filter(&filter.as_ref().unwrap(), true).unwrap();
         Self { interface_name, filter, cap }
     }
@@ -210,7 +210,7 @@ impl ReportCollector {
 pub fn list_all_devices() -> Vec<Device> {
     let devices = Device::list().unwrap();
 
-    for d in &devices {
+/*     for d in &devices {
         if d.flags.connection_status.eq(&ConnectionStatus::Connected) && d.addresses.len() > 1 {
             println!("{:?}: {:?} - IP Net interface: {:?}", d.name, d.flags.connection_status, d.addresses[1].addr);
         } else if d.flags.connection_status.eq(&ConnectionStatus::Connected) && d.addresses.len() < 2 {
@@ -218,7 +218,7 @@ pub fn list_all_devices() -> Vec<Device> {
         } else {
             println!("{:?}: {:?}", d.name, d.flags.connection_status);
         }
-    }
+    } */
     devices
 }
 
