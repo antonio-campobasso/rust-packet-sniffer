@@ -111,8 +111,8 @@ fn main() {
             }
 
             //println!("Pacchetto Inserito : {:?} - {}", packet.ci, packet.cd); // DEBUG
-            let mut rep = report_collector_t.lock().unwrap(); //ERR: sistema
-            rep.add_packet(packet); //ERR: sistema
+            /*let mut rep = report_collector_t.lock().unwrap(); //ERR: sistema
+            rep.add_packet(packet); //ERR: sistema*/
         }
         println!("Capture connection terminated.");
     }));

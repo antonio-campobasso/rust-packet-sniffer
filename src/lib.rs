@@ -267,8 +267,10 @@ pub fn list_all_devices() -> Vec<Device> {
             println!("{:?}: {:?}", d.name, d.flags.connection_status);
         }
     } */
-    devices.iter().filter(|device| device.flags.connection_status == ConnectionStatus::Connected).collect::<Vec<Device>>()
+    //devices.iter().filter(|device| device.flags.connection_status == ConnectionStatus::Connected).collect::<Vec<Device>>()
+    devices
 }
+
 
 ///
 fn app_recognition_udp(src: u16, dst: u16) -> String {
