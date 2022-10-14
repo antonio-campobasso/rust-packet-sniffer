@@ -1,33 +1,21 @@
-<<<<<<< HEAD
-<<<<<<< HEAD
-fn main() {
-    println!("Fuck world!");
-=======
-=======
->>>>>>> centola
 use packet_sniffer::*;
+use pcap::ConnectionStatus;
 
 use std::{
-    collections::HashMap,
-    fs::File,
-    io::{stdin, Write},
+    io::stdin,
     path::PathBuf,
-    str::FromStr,
     sync::{Arc, Condvar, Mutex},
     thread::{self, sleep},
     time::Duration,
 };
 
-// TODO: introduci possibilità di acquisizione raw? stampa pacchetto per pacchetto
-
-use clap::{Error, Parser};
+use clap::Parser;
 
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
 
-// NOTE: considera se implementare guided mode
 struct Args {
-    /// Enables guided mode, where the parameter are asked by the program.
+    /// Enables guided mode
     #[clap(short, long, action, value_name = "guided mode")]
     guided: bool,
 
@@ -37,170 +25,173 @@ struct Args {
 
     /// Time interval between report writings. Defaults to 10 seconds.
     #[clap(value_parser, value_name = "time interval")]
-    time_interval: Option<u64>,
+    time_interval: Option<usize>,
 
-    /// Name of the file in which the report will be written. Defaults to "report.txt".
+    /// Path of the file in which the report will be written. Defaults to "./report.txt".
     #[clap(value_parser, value_name = "output file")]
-    output_file: Option<PathBuf>,
+    file_name: Option<String>,
 
     /// Filter to apply to sniffed packets
     #[clap(short, long, value_parser, value_name = "filter")]
-    filter: Option<String>,
+    filter_string: Option<String>,
 }
 
-
-#[derive(PartialEq)]
-enum State {
-    RUN,
-    PAUSE,
-<<<<<<< HEAD
->>>>>>> simone
-=======
->>>>>>> centola
+enum Error {
+    NoDevicesError,
+    AcquisitionError(String),
+    CaptureError,
+    LockError(String),
 }
 
-const DEFAULT_INTERVAL: u64 = 10;
-const DEFAULT_FILE_NAME: &str = "report.txt";
+const DEFAULT_TIME_INTERVAL: usize = 10;
+const DEFAULT_FILE_NAME: &str = "/report.txt";
+const DEFAULT_FILTER_STRING: &str = "not ip6 and not igmp";
 
 fn main() {
-    let cli = Args::parse();
-
-    let network_interface;
-    let time_interval: u64;
-    let output_file;
-    let filter;
-
+    // Threads
     let mut threads = vec![];
 
+    // Command line variables
+    let mut network_interface = "".to_string();
+    let mut time_interval = DEFAULT_TIME_INTERVAL;
+    let mut file_name = DEFAULT_FILE_NAME.to_string();
+    let mut filter = DEFAULT_FILTER_STRING.to_string();
+
+    // Shared variables
     let report_collector = Arc::new(Mutex::new(ReportCollector::new()));
-    let prog_state = Arc::new((Mutex::new(State::RUN), Condvar::new()));
-    let stop_flag = Arc::new(Mutex::new(false));
+    let running_cvar = Arc::new((Mutex::new(true), Condvar::new()));
+    let stop = Arc::new(Mutex::new(false));
     // NOTE: non posso usare STOP come stato perchè altrimenti si rischia il deadlock
 
-    //list_all_devices()
-    // TODO: modalità per inserire i valori uno ad uno. Vale la pena? magari impostare solo valori default senza guided mode?
-    match cli.network_interface {
-        Some(interface) => network_interface = interface,
-        None => network_interface = "en3".to_string(), //qui da cambiare, prendi la lista di dispositivi e prendi il primo
+    // Parameters handling
+    if let Err(_) = command_line_acquisition(
+        &mut network_interface,
+        &mut time_interval,
+        &mut file_name,
+        &mut filter,
+    ) {
+        panic!();
     }
 
-    match cli.time_interval {
-        Some(interval) => time_interval = interval,
-        None => time_interval = DEFAULT_INTERVAL, // magari definisci in una costante
-    }
-
-    match cli.output_file {
-        Some(file) => output_file = file,
-        None => output_file = PathBuf::from_str(DEFAULT_FILE_NAME).unwrap(), // Da gestire l'errore del file??
-    }
-
-    match cli.filter {
-        Some(f) => filter = f,
-        None => filter = "not ip6 and not igmp".to_string(),
-    }
-
-    println!(
-        "Args: {}, {}, {}",
-        network_interface,
-        time_interval,
-        output_file.to_str().unwrap()
-    ); // DEBUG
-
+    // Thread variables
     let report_collector_t = report_collector.clone();
-    let prog_state_t = prog_state.clone();
-    let stop_flag_t = stop_flag.clone();
+    let running_cvar_t = running_cvar.clone();
+    let stop_t = stop.clone();
 
+    // Thread #1 -> Packet acquisition
     threads.push(thread::spawn(move || {
         let mut capture = CaptureDevice::new(network_interface, Some(filter));
+        // ERR: network interface or filter could be erroneous
+        // CaptureError
         while let Ok(packet) = capture.next_packet() {
-            //sleep(Duration::from_secs(3)); // DEBUG
-            //println!("Pacchetto catturato"); // DEBUG
+            let (lock, cvar) = &*running_cvar_t;
 
-            let (lock, cvar) = &*prog_state_t;
-            let _guard = cvar.wait_while(lock.lock().unwrap(), |state| *state == State::PAUSE);
+            // Pause condvar
+            let _guard = cvar.wait_while(lock.lock().unwrap(), |running| *running == false);
 
-            let stop = stop_flag_t.lock().unwrap();
-            if *stop {
-                break;
+            match stop_t.lock() {
+                Ok(stop) => {
+                    if *stop {
+                        break;
+                    }
+                },
+                Err(e) => {
+                    // Poison error on Lock "stop" detected in Thread #1
+                    todo!()
+                },
             }
+            
+
+            match report_collector_t.lock() {
+                Ok(mut rep) => rep.add_packet(packet),
+                Err(_) => {
+                    // Poison error on Lock "report_collector" detected in Thread #1
+                    todo!()
+                },
+            }
+
             //println!("Pacchetto Inserito : {:?} - {}", packet.ci, packet.cd); // DEBUG
             let mut rep = report_collector_t.lock().unwrap(); //ERR: sistema
             rep.add_packet(packet); //ERR: sistema
-<<<<<<< HEAD
-=======
-           
-
->>>>>>> centola
         }
         println!("Capture connection terminated.");
     }));
 
+    // Thread variables
     let report_collector_t = report_collector.clone();
-    let prog_state_t = prog_state.clone();
-    let stop_flag_t = stop_flag.clone();
+    let running_cvar_t = running_cvar.clone();
+    let stop_t = stop.clone();
 
-    // TODO: considera se la pausa blocca la Creazione di report o no
+    // Thread #2 -> Report generation
     threads.push(thread::spawn(move || {
         loop {
-            sleep(Duration::from_secs(time_interval));
+            sleep(Duration::from_secs(time_interval as u64));
             // NOTE: può capitare che il comando STOP venga inviato durante lo sleep
             // in questo caso il programma non può terminare finchè non scade il timer, un po' uno spreco
             // TODO: considera di usare un thread che ha solo un timer(loop con sleep)
             // che pilota un flag/condvar. Al posto della sleep qui sopra si potrebbe usare una condvar che controlla
             // se il timer è scaduto oppure se è stato ricevuto il comando STOP
 
-            let (lock, cvar) = &*prog_state_t;
+            let (lock, cvar) = &*running_cvar_t;
 
-            let _guard = cvar.wait_while(lock.lock().unwrap(), |state| *state == State::PAUSE);
+            // Pause condvar
+            let _guard = cvar.wait_while(lock.lock().unwrap(), |running| *running == false);
 
-            let stop = stop_flag_t.lock().unwrap(); //ERR: sistema
+            let stop = stop_t.lock().unwrap(); //ERR: sistema
+            // Poison error on Lock "stop" detected in Thread #2
             if *stop {
                 break;
             }
 
-            let rep = report_collector_t.lock().unwrap();
-            rep.produce_report_to_file(output_file.clone()); // DEBUG
+            match report_collector_t.lock() {
+                Ok(rep) => rep.produce_report_to_file(PathBuf::from(file_name.clone())),
+                Err(_) => {
+                    // Poison error on Lock "report_collector" detected in Thread #2
+                    todo!()
+                },
+            };
         }
-        println!("Report manager terminated"); //DEBUG
+        println!("Report manager thread terminated");
     }));
 
-    let mut s = String::new();
-    println!("Acquisition started, type help to see available commands.");
-    loop {
-        print!("> ");
-        s.clear();
-        stdin().read_line(&mut s).expect("Errore stringa"); //ERR: sistema
-        print!("\n");
 
-        let (lock, cvar) = &*prog_state;
-        let mut state = lock.lock().unwrap(); //ERR: sistema
+    let mut s = String::new();
+    println!("Acquisition started, type 'help' to see available commands.");
+    loop {
+        s.clear();
+        stdin().read_line(&mut s).expect("Errore stringa");
+        // ERR Acquisition error on main thread
+
+        let (lock, cvar) = &*running_cvar;
+        let mut running = lock.lock().unwrap();
+        // ERR poison error on lock "running" detected in main thread
 
         match s.trim().to_lowercase().as_str() {
             "resume" | "r" => {
-                *state = State::RUN;
-                println!("Play");
+                *running = true;
+                println!("Resumed");
                 cvar.notify_all();
             }
             "pause" | "p" => {
-                *state = State::PAUSE;
-                println!("Pausa");
+                *running = false;
+                println!("Paused");
                 cvar.notify_all();
             }
             "stop" | "s" => {
-                let mut stop = stop_flag.lock().unwrap();
+                let mut stop = stop.lock().unwrap(); //ERR: sistema
                 *stop = true;
 
-                *state = State::RUN;
-                println!("Stop");
+                *running = false;
+                println!("Stopped");
                 cvar.notify_all();
                 break;
             }
             "help" | "h" => {
                 println!(
-                    "> Pause (p)    => Pauses packet acquisition and report generation.
-> Resume (r)    => Resumes packet acquisition and report generation.
-> Stop (s)      => Stops the program.
-> Help (h)      => Shows line commands. "
+                    "- Pause (p)     => Pauses packet acquisition and report generation.
+- Resume (r)    => Resumes packet acquisition and report generation.
+- Stop (s)      => Stops the program.
+- Help (h)      => Shows line commands. "
                 )
             }
             // TODO: spostare le stringhe in costanti a parte
@@ -214,4 +205,116 @@ fn main() {
     for t in threads {
         t.join().expect("TT"); //ERR: sistema
     }
+}
+
+fn command_line_acquisition(
+    network_interface: &mut String,
+    time_interval: &mut usize,
+    file_name: &mut String,
+    filter: &mut String,
+) -> Result<(), Error> {
+    let cli = Args::parse();
+
+    if cli.guided {
+        let mut buffer = String::new();
+        let devices = list_all_devices();
+
+        // Network interface selection
+        println!("Select network interface from the following: ");
+        devices
+            .iter()
+            .filter(|device| device.flags.connection_status == ConnectionStatus::Connected) // da cambiare, non dovrei vedere Device o ConnectionStatus
+            .for_each(|device| println!("- {}", device.name));
+
+        if let Err(_) = stdin().read_line(&mut buffer) {
+            // Reading error on network interface
+            todo!()
+        }
+        *network_interface = buffer.trim().to_string();
+
+        buffer.clear();
+
+        // Time interval
+        println!("Insert time interval between report production: ");
+        if let Err(_) = stdin().read_line(&mut buffer) {
+            // Reading error on time interval
+            todo!()
+        }
+
+        if let Ok(val) = buffer.trim().parse() {
+            *time_interval = val;
+        } else {
+            // Parse error on time interval, insert a number
+            todo!();
+        }
+
+        buffer.clear();
+
+        // File name
+        println!("Insert file name for the report: ");
+        if let Err(_) = stdin().read_line(&mut buffer) {
+            // Reading error on file name
+            todo!()
+        }
+        *file_name = buffer.trim().to_string();
+
+        buffer.clear();
+
+        // FilterW
+        println!("Insert packet filter string: ");
+        if let Err(_) = stdin().read_line(&mut buffer) {
+            // Reading error on filter
+            todo!()
+        }
+
+        *filter = buffer.trim().to_string();
+
+        return Ok(());
+    }
+
+    match cli.network_interface {
+        Some(interface) => *network_interface = interface,
+        None => {
+            *network_interface = match list_all_devices().first() {
+                Some(first_device) => {
+                    let interface = first_device.name.clone();
+                    println!("Interface: {}", interface);
+                    interface
+                }
+                None => return Err(Error::NoDevicesError),
+            }
+        }
+    }
+
+    match cli.time_interval {
+        Some(interval) => *time_interval = interval,
+        None => {
+            *time_interval = {
+                println!("Time interval: {}", DEFAULT_TIME_INTERVAL);
+                DEFAULT_TIME_INTERVAL
+            }
+        }
+    }
+
+    match cli.file_name {
+        Some(name) => *file_name = name,
+        None => {
+            *file_name = {
+                println!("File name: {}", DEFAULT_FILE_NAME);
+                DEFAULT_FILE_NAME.to_string()
+            }
+        }
+    }
+
+    match cli.filter_string {
+        Some(f) => *filter = f,
+        None => {
+            *filter = {
+                println!("Filter: {}", DEFAULT_FILTER_STRING);
+                DEFAULT_FILTER_STRING.to_string()
+            }
+        }
+    }
+
+    Ok(())
 }
