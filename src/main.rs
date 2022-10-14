@@ -41,7 +41,6 @@ enum Error {
     AcquisitionError(String),
     CaptureError,
     LockError(String),
-
 }
 
 const DEFAULT_TIME_INTERVAL: usize = 10;
@@ -111,6 +110,9 @@ fn main() {
                 },
             }
 
+            //println!("Pacchetto Inserito : {:?} - {}", packet.ci, packet.cd); // DEBUG
+            let mut rep = report_collector_t.lock().unwrap(); //ERR: sistema
+            rep.add_packet(packet); //ERR: sistema
         }
         println!("Capture connection terminated.");
     }));

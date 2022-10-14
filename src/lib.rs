@@ -7,14 +7,21 @@ use pktparse::{ethernet, ipv4, tcp, udp, icmp, arp};
 use std::net::Ipv4Addr;
 use std::path::PathBuf;
 use std::string::{ToString, self};
+<<<<<<< HEAD
 use libc::{sleep, suseconds_t, time, time_t, timeval};
 use pktparse::arp::Operation;
 use pktparse::ethernet::MacAddress;
 use pktparse::icmp::{IcmpCode, parse_icmp_header};
+=======
+>>>>>>> centola
 use pktparse::ip::IPProtocol;
 use pktparse::ipv4::IPv4Header;
 
 
+<<<<<<< HEAD
+=======
+//TODO racchiudere le due struct ConnInfo e ConnData in un'altra struct???
+>>>>>>> centola
 //--------------------------------------
 #[derive(Eq, PartialEq, Hash, Debug)]
 pub struct ConnInfo {
@@ -143,6 +150,7 @@ pub struct ReportCollector {
     now: timeval,
 }
 
+
 impl ReportCollector {
     pub fn new() -> Self {
         ReportCollector {
@@ -167,6 +175,7 @@ impl ReportCollector {
         }
     }
 
+<<<<<<< HEAD
     fn sub_timeval(sot: timeval, min: timeval) -> timeval {
         let tf1 = (sot.tv_sec * 1000000) as u64;
         let tf2 = sot.tv_usec as u64;
@@ -201,6 +210,30 @@ impl ReportCollector {
             i += 1;
         }
         f.write_all(footer.as_bytes()); //guardare warning su uso di REsult
+=======
+    /*pub fn produce_report(&self) -> String {
+        //println!("Report in stampa");
+        //sleep(Duration::from_secs(2));
+        //println!("Report Stampato");
+        "res".to_string;
+    }*/
+
+
+    pub fn produce_report_to_file(&self, file_name: PathBuf) -> () {
+
+        let mut f = File::create(file_name).unwrap();
+        let header = "\n\t------------------------------------------------------------------------------------\nn\t|\tsorce\t|\tdest \t|\tsrc_p\t|\tdst_p\t|\tprot \t|\tdescr\t|\ttot_b\t|\n\t------------------------------------------------------------------------------------\n".to_string();
+        let footer = "\t------------------------------------------------------------------------------------\n";
+        f.write_all(header.as_bytes());
+        let mut i = 0;
+
+        for (k, v) in self.report.iter() {
+            let s = format!("\t{:>7}\t|\t{:>7}\t|\t{:>7}\t|\t{:>7}\t|\t{:>7}\t|\t{:>7}\t|\t{:>7}\t|\t{}\t|\n",i,k.src.to_string(),k.dst.to_string(),k.src_port.to_string(),k.dst_port.to_string(),k.protocol.to_string(),k.app_descr.to_string(),v.total_bytes.to_string()); 
+            f.write_all(s.as_bytes());
+            i+=1;
+            }
+        f.write_all(footer.as_bytes());
+>>>>>>> centola
         //let s = self.report.iter().map(|(k,v)|{k.src.to_string() + k.dst.to_string() + k.src_port.to_string() + k.dst_port.to_string() + k.protocol.to_string() + k.app_descr.to_string() + v.ts_first.to_string() + v.ts_last.to_string() + v.total_bytes.to_string()}).for_each(|x|{f.write_all((header + x).as_byte())});
     }
 }
