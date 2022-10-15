@@ -165,7 +165,7 @@ impl CaptureDevice {
         interface_name: String,
         filter: Option<String>,
     ) -> Result<Self, NetworkInterfaceError> {
-        let mut cap_d = Capture::from_device(interface_name.as_str());
+        let cap_d = Capture::from_device(interface_name.as_str());
         let mut cap_d_string = match cap_d {
             Ok(inner) => {
                 let dev = inner
@@ -204,10 +204,13 @@ impl CaptureDevice {
         })
     }
 
-    pub fn next_packet(&mut self) -> Result<PacketData, Error> {
-        let p = self.cap.next_packet().unwrap();
+    pub fn next_packet(&mut self) -> Result<PacketData, ParsingError> {
+        let p = self.cap.next_packet().unwrap(); // forse è meglio cambiare nome della nostra next_packet...
         let parsed_p = parse(p);
-        Ok(parsed_p)
+        match parsed_p{
+            Ok(packet) => {Ok(packet)},
+            Err(e) => {return Err(e);}
+        }
     }
 }
 //----------------------------------------------
@@ -343,6 +346,12 @@ pub fn list_all_devices() -> Result<Vec<Device>,NetworkInterfaceError> {
     //devices.iter().filter(|device| device.flags.connection_status == ConnectionStatus::Connected).collect::<Vec<Device>>()
 }
 
+pub enum ParsingError {
+    TCPParsingError(String),
+    HeaderWritingError(String),
+    ReportWritingError(String),
+    FooterWritingError(String),
+}
 ///
 fn app_recognition_udp(src: u16, dst: u16) -> String {
     if dst == 53 {
@@ -371,7 +380,7 @@ fn app_recognition_tcp(src: u16, dst: u16) -> String {
     "app not recognized".to_string()
 }
 
-fn parse(packet: Packet) -> PacketData {
+fn parse(packet: Packet) -> Result<PacketData, ParsingError> {
     // TODO errori
     if let Ok((payload_e, frame)) = ethernet::parse_ethernet_frame(packet.data) {
         match frame.ethertype {
@@ -386,7 +395,7 @@ fn parse(packet: Packet) -> PacketData {
                                     segment.dest_port,
                                     app_recognition_tcp(segment.source_port, segment.dest_port)
                                 );
-                                PacketData::new(
+                                Ok(PacketData::new(
                                     datagram.source_addr.to_string(),
                                     datagram.dest_addr.to_string(),
                                     segment.source_port,
@@ -395,7 +404,7 @@ fn parse(packet: Packet) -> PacketData {
                                     packet.header,
                                     payload_e.len(),
                                     s,
-                                ) //aggiungere app description
+                                )) //aggiungere app description
                             } else {
                                 panic!("Error parsing TCP segment.");
                             }
@@ -412,7 +421,7 @@ fn parse(packet: Packet) -> PacketData {
                                         udp_datagram.dest_port
                                     )
                                 );
-                                PacketData::new(
+                                Ok(PacketData::new(
                                     datagram.source_addr.to_string(),
                                     datagram.dest_addr.to_string(),
                                     udp_datagram.source_port,
@@ -421,7 +430,7 @@ fn parse(packet: Packet) -> PacketData {
                                     packet.header,
                                     payload_e.len(),
                                     s,
-                                )
+                                ))
                             } else {
                                 panic!("Error parsing UDP datagram.");
                             }
@@ -431,7 +440,7 @@ fn parse(packet: Packet) -> PacketData {
                             if let Ok((_payload, icmp_header)) = parse_icmp_header(payload_i) {
                                 if icmp_header.code == IcmpCode::EchoRequest {
                                     let s = format!("Echo (ping) request");
-                                    PacketData::new(
+                                    Ok(PacketData::new(
                                         datagram.source_addr.to_string(),
                                         datagram.dest_addr.to_string(),
                                         0,
@@ -440,10 +449,10 @@ fn parse(packet: Packet) -> PacketData {
                                         packet.header,
                                         payload_e.len(),
                                         s,
-                                    )
+                                    ))
                                 } else if icmp_header.code == IcmpCode::EchoReply {
                                     let s = format!("Echo (ping) reply");
-                                    PacketData::new(
+                                    Ok(PacketData::new(
                                         datagram.source_addr.to_string(),
                                         datagram.dest_addr.to_string(),
                                         0,
@@ -452,10 +461,10 @@ fn parse(packet: Packet) -> PacketData {
                                         packet.header,
                                         payload_e.len(),
                                         s,
-                                    )
+                                    ))
                                 } else {
                                     let s = format!("Destination unreachable");
-                                    PacketData::new(
+                                    Ok(PacketData::new(
                                         datagram.source_addr.to_string(),
                                         datagram.dest_addr.to_string(),
                                         0,
@@ -464,7 +473,7 @@ fn parse(packet: Packet) -> PacketData {
                                         packet.header,
                                         payload_e.len(),
                                         s,
-                                    )
+                                    ))
                                 }
                             } else {
                                 panic!("Error parsing ICMP packet.");
@@ -495,7 +504,7 @@ fn parse(packet: Packet) -> PacketData {
                             "Request - Who has {} ? Tell {}",
                             arp_header.dest_addr, arp_header.src_addr
                         );
-                        PacketData::new(
+                        Ok(PacketData::new(
                             frame.source_mac.tostring(),
                             frame.dest_mac.tostring(),
                             0,
@@ -504,14 +513,14 @@ fn parse(packet: Packet) -> PacketData {
                             packet.header,
                             payload_e.len(),
                             s,
-                        ) //aggiungere app description
+                        ) )//aggiungere app description
                     } else {
                         let s = format!(
                             "Reply - {} is at {}",
                             arp_header.dest_addr,
                             arp_header.src_mac.tostring()
                         );
-                        PacketData::new(
+                        Ok(PacketData::new(
                             frame.source_mac.tostring(),
                             frame.dest_mac.tostring(),
                             0,
@@ -520,7 +529,7 @@ fn parse(packet: Packet) -> PacketData {
                             packet.header,
                             payload_e.len(),
                             s,
-                        ) //aggiungere app description
+                        )) //aggiungere app description
                     }
                 } else {
                     panic!("Error parsing ARP packet.")
