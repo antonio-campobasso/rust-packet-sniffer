@@ -153,23 +153,55 @@ pub struct CaptureDevice {
     cap: Capture<Active>,
 }
 
+#[derive(Debug)]
+pub enum NetworkInterfaceError {
+    CaptureDeviceOpeningError(String),
+    WrongNameFormat(String),
+    NoDevicesError(String),
+    FilterError(String),
+}
 impl CaptureDevice {
-    pub fn new(interface_name: String, filter: Option<String>) -> Self {
-        let mut cap = Capture::from_device(interface_name.as_str())
-            .unwrap() // TODO assume the device exists and we are authorized to open it
-            .promisc(true)
-            //.snaplen(65535)
-            .buffer_size(1600) //serve per vedere subito output quando inviamo pochi dati, altrimenti non vedevo efficacia filtri
-            .open()
-            .unwrap(); //TODO check error in opening and starting a capture
+    pub fn new(
+        interface_name: String,
+        filter: Option<String>,
+    ) -> Result<Self, NetworkInterfaceError> {
+        let mut cap_d = Capture::from_device(interface_name.as_str());
+        let mut cap_d_string = match cap_d {
+            Ok(inner) => {
+                let dev = inner
+                    .promisc(true)
+                    //.snaplen(65535)
+                    //.buffer_size(1600) //serve per vedere subito output quando inviamo pochi dati, altrimenti non vedevo efficacia filtri
+                    .open();
+                match dev {
+                    Ok(inner_dev) => inner_dev,
+                    Err(e) => {
+                        return Err(NetworkInterfaceError::CaptureDeviceOpeningError(
+                            e.to_string(),
+                        ));
+                    }
+                }
+            }
+            Err(e) => {
+                return Err(NetworkInterfaceError::WrongNameFormat(e.to_string()));
+            }
+        };
 
-        //println!("Sniffing process in promiscuous mode is active on interface: {}", interface_name);
-        cap.filter(&filter.as_ref().unwrap(), true).unwrap();
-        Self {
-            interface_name,
-            filter,
-            cap,
+        if filter.is_some() {
+            let filtered = cap_d_string.filter(&filter.as_ref().unwrap(), true);
+            match filtered {
+                Ok(_) => {}
+                Err(e) => {
+                    return Err(NetworkInterfaceError::FilterError(e.to_string()));
+                }
+            }
         }
+
+        Ok(Self {
+            interface_name: interface_name,
+            filter: filter,
+            cap: cap_d_string,
+        })
     }
 
     pub fn next_packet(&mut self) -> Result<PacketData, Error> {
@@ -180,6 +212,13 @@ impl CaptureDevice {
 }
 //----------------------------------------------
 // TODO: Implementare il tratto drop?
+
+pub enum ReportError {
+    CreationFileError(String),
+    HeaderWritingError(String),
+    ReportWritingError(String),
+    FooterWritingError(String),
+}
 
 pub struct ReportCollector {
     report: HashMap<ConnInfo, ConnData>,
@@ -233,11 +272,23 @@ impl ReportCollector {
         }
     }
 
-    pub fn produce_report_to_file(&self, file_name: PathBuf) -> () {
-        let mut f = File::create(file_name).unwrap();
+    pub fn produce_report_to_file(&self, file_name: PathBuf) -> Result<(), ReportError> {
+        let of = File::create(file_name);
+        let mut f = match of {
+            Ok(file) => file,
+            Err(e) => {
+                return Err(ReportError::CreationFileError(e.to_string()));
+            }
+        };
         let header = "\n\t---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------\n\t\tn\t|\t\t\tsource\t\t|\t\tdestination\t\t|\tprotocol|\t\tts_first\t|\t\tts_last\t\t|\ttotal_bytes |\t\t\t\t\t\t\tdescription\t\t\t\t\t\t\t|\n\t---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------\n".to_string();
         let footer = "\t---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------\n";
-        f.write_all(header.as_bytes()); // guardare il warning di clion su uso di result
+        let h = f.write_all(header.as_bytes()); // guardare il warning di clion su uso di result ???
+        match h {
+            Ok(_) => {}
+            Err(e) => {
+                return Err(ReportError::HeaderWritingError(e.to_string()));
+            }
+        }
         let mut i = 0;
 
         for (k, v) in self.report.iter() {
@@ -247,10 +298,23 @@ impl ReportCollector {
             //creare una string con app description e  porte
             //let s = format!("\t{:>5}\t|\t{:>15}\t|\t{:>15}\t|\t{:>7}\t|\t{:>7}\t|\t{:>7}\t|\t{:>7}.{:06}\t|\t{:>7}.{:06}\t|\t{:>7}\t|\t{:>7}\t|\n",i,k.src.to_string(),k.dst.to_string(),k.src_port.to_string(),k.dst_port.to_string(),k.protocol.to_string(),(v.ts_first.tv_sec - self.now.tv_sec), v.ts_first.tv_usec,(v.ts_last.tv_sec-self.now.tv_sec),v.ts_last.tv_usec, v.total_bytes.to_string(),k.app_descr.to_string());
             let s = format!("\t{:>5}\t|\t{:>18}\t|\t{:>18}\t|\t{:>7}\t|\t{:>7}.{:06}\t|\t{:>7}.{:06}\t|\t{:>12}| {:<60}\t|\n", i, k.src.to_string(), k.dst.to_string(), k.protocol.to_string(), ts_first.tv_sec, ts_first.tv_usec, ts_last.tv_sec, ts_last.tv_usec, v.total_bytes.to_string(), k.app_descr.to_string());
-            f.write_all(s.as_bytes());
+            let r = f.write_all(s.as_bytes());
+            match h {
+                Ok(_) => {}
+                Err(e) => {
+                    return Err(ReportError::ReportWritingError(e.to_string()));
+                }
+            }
             i += 1;
         }
-        f.write_all(footer.as_bytes()); //guardare warning su uso di REsult
+        let f = f.write_all(footer.as_bytes());
+        match f {
+            Ok(_) => {}
+            Err(e) => {
+                return Err(ReportError::FooterWritingError(e.to_string()));
+            }
+        }
+        Ok(())
     }
 }
 //----------------------------------------------------------
@@ -267,10 +331,10 @@ pub fn list_all_devices() -> Vec<Device> {
             println!("{:?}: {:?}", d.name, d.flags.connection_status);
         }
     } */
+
     //devices.iter().filter(|device| device.flags.connection_status == ConnectionStatus::Connected).collect::<Vec<Device>>()
     devices
 }
-
 
 ///
 fn app_recognition_udp(src: u16, dst: u16) -> String {

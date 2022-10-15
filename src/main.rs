@@ -80,7 +80,7 @@ fn main() {
 
     // Thread #1 -> Packet acquisition
     threads.push(thread::spawn(move || {
-        let mut capture = CaptureDevice::new(network_interface, Some(filter));
+        let mut capture = CaptureDevice::new(network_interface, Some(filter)).unwrap();
         // ERR: network interface or filter could be erroneous
         // CaptureError
         while let Ok(packet) = capture.next_packet() {
