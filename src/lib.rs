@@ -160,6 +160,7 @@ pub enum NetworkInterfaceError {
     FilterError(String),
     NoDevicesError(String),
 }
+
 impl CaptureDevice {
     pub fn new(
         interface_name: String,
@@ -212,6 +213,21 @@ impl CaptureDevice {
             Err(e) => {return Err(e);}
         }
     }
+}
+
+//----------------------------------------------------------
+// list devices
+pub fn list_all_devices() -> Result<Vec<Device>,NetworkInterfaceError> {
+    let dev_list  = Device::list();
+    match dev_list {
+        Ok(devices) =>
+        {Ok(devices.iter().filter(|device| device.flags.connection_status == ConnectionStatus::Connected).cloned().collect())}
+        Err(e) => {
+            return Err(NetworkInterfaceError::NoDevicesError(e.to_string()));
+        }
+    }
+
+    //devices.iter().filter(|device| device.flags.connection_status == ConnectionStatus::Connected).collect::<Vec<Device>>()
 }
 //----------------------------------------------
 // TODO: Implementare il tratto drop?
@@ -320,37 +336,11 @@ impl ReportCollector {
         Ok(())
     }
 }
-//----------------------------------------------------------
-// list devices
-pub fn list_all_devices() -> Result<Vec<Device>,NetworkInterfaceError> {
-    let dev_list  = Device::list();
-    match dev_list {
-        Ok(devices) =>
-        {Ok(devices.iter().filter(|device| device.flags.connection_status == ConnectionStatus::Connected).cloned().collect())}
-        Err(e) => {
-            return Err(NetworkInterfaceError::NoDevicesError(e.to_string()));
-        }
-    }
 
-
-    /*     for d in &devices {
-        if d.flags.connection_status.eq(&ConnectionStatus::Connected) && d.addresses.len() > 1 {
-            println!("{:?}: {:?} - IP Net interface: {:?}", d.name, d.flags.connection_status, d.addresses[1].addr);
-        } else if d.flags.connection_status.eq(&ConnectionStatus::Connected) && d.addresses.len() < 2 {
-            continue; //Per il Mac bypass llw0 and awdl interface because not chooseable
-        } else {
-            println!("{:?}: {:?}", d.name, d.flags.connection_status);
-        }
-    } */
-
-    //devices.iter().filter(|device| device.flags.connection_status == ConnectionStatus::Connected).collect::<Vec<Device>>()
-}
 
 pub enum ParsingError {
-    TCPParsingError(String),
-    HeaderWritingError(String),
-    ReportWritingError(String),
-    FooterWritingError(String),
+    NotSupported(String),
+    PacketParsingError(String)
 }
 ///
 fn app_recognition_udp(src: u16, dst: u16) -> String {
@@ -406,7 +396,7 @@ fn parse(packet: Packet) -> Result<PacketData, ParsingError> {
                                     s,
                                 )) //aggiungere app description
                             } else {
-                                panic!("Error parsing TCP segment.");
+                                return Err(ParsingError::PacketParsingError("Error parsing TCP segment.".to_string()));
                             }
                         }
                         IPProtocol::UDP => {
@@ -432,7 +422,7 @@ fn parse(packet: Packet) -> Result<PacketData, ParsingError> {
                                     s,
                                 ))
                             } else {
-                                panic!("Error parsing UDP datagram.");
+                                return Err(ParsingError::PacketParsingError("Error parsing UDP datagram.".to_string()));
                             }
                         }
 
@@ -476,25 +466,25 @@ fn parse(packet: Packet) -> Result<PacketData, ParsingError> {
                                     ))
                                 }
                             } else {
-                                panic!("Error parsing ICMP packet.");
+                                return Err(ParsingError::PacketParsingError("Error parsing ICMP packet.".to_string()));
                             }
                         }
                         IPProtocol::ICMP6 => {
-                            panic!("ICMP6 not supported");
+                            return Err(ParsingError::NotSupported("ICMP6 not supported".to_string()));
                         }
                         IPProtocol::IGMP => {
-                            panic!("IGMP not supported");
+                            return Err(ParsingError::NotSupported("IGMP not supported".to_string()));
                         }
                         _ => {
-                            panic!("L4 protocol not supported")
+                            return Err(ParsingError::NotSupported("L4 protocol not supported".to_string()));
                         }
                     }
                 } else {
-                    panic!("Error parsing IPv4 datagram.");
+                    return Err(ParsingError::PacketParsingError("Error parsing IPv4 datagram.".to_string()));
                 }
             }
             ethernet::EtherType::IPv6 => {
-                panic!(" IPv6 datagram not supported");
+                return Err(ParsingError::NotSupported("IPv6 datagram not supported".to_string()));
             }
 
             ethernet::EtherType::ARP => {
@@ -532,14 +522,14 @@ fn parse(packet: Packet) -> Result<PacketData, ParsingError> {
                         )) //aggiungere app description
                     }
                 } else {
-                    panic!("Error parsing ARP packet.")
+                    return Err(ParsingError::PacketParsingError("Error parsing ARP packet.".to_string()));
                 }
             }
             _ => {
-                panic!("L3 protocol not supported")
+                return Err(ParsingError::NotSupported("L3 protocol not supported".to_string()));
             }
         }
     } else {
-        panic!("Error parsing Ethernet frame.");
+        return Err(ParsingError::PacketParsingError("Error parsing Ethernet frame.".to_string()));
     }
 }
