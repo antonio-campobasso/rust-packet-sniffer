@@ -157,8 +157,8 @@ pub struct CaptureDevice {
 pub enum NetworkInterfaceError {
     CaptureDeviceOpeningError(String),
     WrongNameFormat(String),
-    NoDevicesError(String),
     FilterError(String),
+    NoDevicesError(String),
 }
 impl CaptureDevice {
     pub fn new(
@@ -319,8 +319,16 @@ impl ReportCollector {
 }
 //----------------------------------------------------------
 // list devices
-pub fn list_all_devices() -> Vec<Device> {
-    let devices = Device::list().unwrap();
+pub fn list_all_devices() -> Result<Vec<Device>,NetworkInterfaceError> {
+    let dev_list  = Device::list();
+    match dev_list {
+        Ok(devices) =>
+        {Ok(devices.iter().filter(|device| device.flags.connection_status == ConnectionStatus::Connected).cloned().collect())}
+        Err(e) => {
+            return Err(NetworkInterfaceError::NoDevicesError(e.to_string()));
+        }
+    }
+
 
     /*     for d in &devices {
         if d.flags.connection_status.eq(&ConnectionStatus::Connected) && d.addresses.len() > 1 {
@@ -333,7 +341,6 @@ pub fn list_all_devices() -> Vec<Device> {
     } */
 
     //devices.iter().filter(|device| device.flags.connection_status == ConnectionStatus::Connected).collect::<Vec<Device>>()
-    devices
 }
 
 ///

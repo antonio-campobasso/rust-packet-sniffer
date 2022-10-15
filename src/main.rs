@@ -94,20 +94,19 @@ fn main() {
                     if *stop {
                         break;
                     }
-                },
+                }
                 Err(e) => {
                     // Poison error on Lock "stop" detected in Thread #1
                     todo!()
-                },
+                }
             }
-            
 
             match report_collector_t.lock() {
                 Ok(mut rep) => rep.add_packet(packet),
                 Err(_) => {
                     // Poison error on Lock "report_collector" detected in Thread #1
                     todo!()
-                },
+                }
             }
 
             //println!("Pacchetto Inserito : {:?} - {}", packet.ci, packet.cd); // DEBUG
@@ -138,7 +137,7 @@ fn main() {
             let _guard = cvar.wait_while(lock.lock().unwrap(), |running| *running == false);
 
             let stop = stop_t.lock().unwrap(); //ERR: sistema
-            // Poison error on Lock "stop" detected in Thread #2
+                                               // Poison error on Lock "stop" detected in Thread #2
             if *stop {
                 break;
             }
@@ -148,12 +147,11 @@ fn main() {
                 Err(_) => {
                     // Poison error on Lock "report_collector" detected in Thread #2
                     todo!()
-                },
+                }
             };
         }
         println!("Report manager thread terminated");
     }));
-
 
     let mut s = String::new();
     println!("Acquisition started, type 'help' to see available commands.");
@@ -222,6 +220,7 @@ fn command_line_acquisition(
         // Network interface selection
         println!("Select network interface from the following: ");
         devices
+            .unwrap()
             .iter()
             .for_each(|device| println!("- {}", device.name));
 
@@ -274,7 +273,7 @@ fn command_line_acquisition(
     match cli.network_interface {
         Some(interface) => *network_interface = interface,
         None => {
-            *network_interface = match list_all_devices().first() {
+            *network_interface = match list_all_devices().unwrap().first() {
                 Some(first_device) => {
                     let interface = first_device.name.clone();
                     println!("Interface: {}", interface);
