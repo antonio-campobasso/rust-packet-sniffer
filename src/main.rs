@@ -11,6 +11,8 @@ use std::{
 
 use clap::Parser;
 
+use crate::params::get_params;
+
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
 
@@ -46,7 +48,29 @@ fn main() {
     let stop = Arc::new(Mutex::new(false));
 
     // Command line variables
-    let params = params::get_params().unwrap(); // TODO: capisci come fare
+    let params = match get_params() {
+        Ok(params) => params,
+        Err(e) => {
+            match e {
+                params::Error::NoDevicesError => {
+                    println!("No capture devices found");
+                },
+                params::Error::ParseError => {
+                    println!("Parsing error");
+                },
+                params::Error::WrongFilterFormat => {
+                    println!("Wrong filter passed");
+                },
+                params::Error::WrongNameFormat => {
+                    println!("Wrong name of interface");
+                },
+                params::Error::OpeningError => {
+                    println!("Error in connection opening");
+                },
+            };
+            return;
+        },
+    }; // TODO: capisci come fare
 
     // Thread variables
     let report_collector_t = report_collector.clone();
