@@ -1,18 +1,16 @@
-use libc::{sleep, suseconds_t, time, time_t, timeval};
-use pcap::{Active, Capture, ConnectionStatus, Device, Error, Packet, PacketHeader};
+use libc::{suseconds_t, time_t, timeval};
+use pcap::{Active, Capture, ConnectionStatus, Device, Packet, PacketHeader};
 use pktparse::arp::Operation;
 use pktparse::ethernet::MacAddress;
 use pktparse::icmp::{parse_icmp_header, IcmpCode};
 use pktparse::ip::IPProtocol;
-use pktparse::ipv4::IPv4Header;
-use pktparse::{arp, ethernet, icmp, ipv4, tcp, udp};
+use pktparse::{arp, ethernet, ipv4, tcp, udp};
 use std::collections::HashMap;
-use std::fmt::{format, Display, Formatter};
+use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::Write;
-use std::net::Ipv4Addr;
 use std::path::PathBuf;
-use std::string::{self, ToString};
+use std::string::ToString;
 
 //--------------------------------------
 #[derive(Eq, PartialEq, Hash, Debug)]
@@ -148,8 +146,8 @@ impl PacketData {
 
 //----------------------------------------
 pub struct CaptureDevice {
-    interface_name: String,
-    filter: Option<String>,
+    _interface_name: String,
+    _filter: Option<String>,
     cap: Capture<Active>,
 }
 
@@ -171,8 +169,8 @@ impl CaptureDevice {
             Ok(inner) => {
                 let dev = inner
                     .promisc(true)
-                    //.snaplen(65535)
-                    //.buffer_size(1600) //serve per vedere subito output quando inviamo pochi dati, altrimenti non vedevo efficacia filtri
+                    .snaplen(65535)
+                    .buffer_size(65535) //serve per vedere subito output quando inviamo pochi dati, altrimenti non vedevo efficacia filtri
                     .open();
                 match dev {
                     Ok(inner_dev) => inner_dev,
@@ -199,8 +197,8 @@ impl CaptureDevice {
         }
 
         Ok(Self {
-            interface_name: interface_name,
-            filter: filter,
+            _interface_name: interface_name,
+            _filter: filter,
             cap: cap_d_string,
         })
     }
@@ -208,20 +206,25 @@ impl CaptureDevice {
     pub fn next_packet(&mut self) -> Result<PacketData, ParsingError> {
         let p = self.cap.next_packet().unwrap(); // forse è meglio cambiare nome della nostra next_packet...
         let parsed_p = parse(p);
-        match parsed_p{
-            Ok(packet) => {Ok(packet)},
-            Err(e) => {return Err(e);}
+        match parsed_p {
+            Ok(packet) => Ok(packet),
+            Err(e) => {
+                return Err(e);
+            }
         }
     }
 }
 
 //----------------------------------------------------------
 // list devices
-pub fn list_all_devices() -> Result<Vec<Device>,NetworkInterfaceError> {
-    let dev_list  = Device::list();
+pub fn list_all_devices() -> Result<Vec<Device>, NetworkInterfaceError> {
+    let dev_list = Device::list();
     match dev_list {
-        Ok(devices) =>
-        {Ok(devices.iter().filter(|device| device.flags.connection_status == ConnectionStatus::Connected).cloned().collect())}
+        Ok(devices) => Ok(devices
+            .iter()
+            .filter(|device| device.flags.connection_status == ConnectionStatus::Connected)
+            .cloned()
+            .collect()),
         Err(e) => {
             return Err(NetworkInterfaceError::NoDevicesError(e.to_string()));
         }
@@ -232,6 +235,7 @@ pub fn list_all_devices() -> Result<Vec<Device>,NetworkInterfaceError> {
 //----------------------------------------------
 // TODO: Implementare il tratto drop?
 
+#[derive(Debug)]
 pub enum ReportError {
     CreationFileError(String),
     HeaderWritingError(String),
@@ -317,7 +321,7 @@ impl ReportCollector {
             //creare una string con app description e  porte
             //let s = format!("\t{:>5}\t|\t{:>15}\t|\t{:>15}\t|\t{:>7}\t|\t{:>7}\t|\t{:>7}\t|\t{:>7}.{:06}\t|\t{:>7}.{:06}\t|\t{:>7}\t|\t{:>7}\t|\n",i,k.src.to_string(),k.dst.to_string(),k.src_port.to_string(),k.dst_port.to_string(),k.protocol.to_string(),(v.ts_first.tv_sec - self.now.tv_sec), v.ts_first.tv_usec,(v.ts_last.tv_sec-self.now.tv_sec),v.ts_last.tv_usec, v.total_bytes.to_string(),k.app_descr.to_string());
             let s = format!("\t{:>5}\t|\t{:>18}\t|\t{:>18}\t|\t{:>7}\t|\t{:>7}.{:06}\t|\t{:>7}.{:06}\t|\t{:>12}| {:<60}\t|\n", i, k.src.to_string(), k.dst.to_string(), k.protocol.to_string(), ts_first.tv_sec, ts_first.tv_usec, ts_last.tv_sec, ts_last.tv_usec, v.total_bytes.to_string(), k.app_descr.to_string());
-            let r = f.write_all(s.as_bytes());
+            f.write_all(s.as_bytes()).unwrap();
             match h {
                 Ok(_) => {}
                 Err(e) => {
@@ -337,10 +341,9 @@ impl ReportCollector {
     }
 }
 
-
 pub enum ParsingError {
     NotSupported(String),
-    PacketParsingError(String)
+    PacketParsingError(String),
 }
 ///
 fn app_recognition_udp(src: u16, dst: u16) -> String {
@@ -396,7 +399,9 @@ fn parse(packet: Packet) -> Result<PacketData, ParsingError> {
                                     s,
                                 )) //aggiungere app description
                             } else {
-                                return Err(ParsingError::PacketParsingError("Error parsing TCP segment.".to_string()));
+                                return Err(ParsingError::PacketParsingError(
+                                    "Error parsing TCP segment.".to_string(),
+                                ));
                             }
                         }
                         IPProtocol::UDP => {
@@ -422,7 +427,9 @@ fn parse(packet: Packet) -> Result<PacketData, ParsingError> {
                                     s,
                                 ))
                             } else {
-                                return Err(ParsingError::PacketParsingError("Error parsing UDP datagram.".to_string()));
+                                return Err(ParsingError::PacketParsingError(
+                                    "Error parsing UDP datagram.".to_string(),
+                                ));
                             }
                         }
 
@@ -466,25 +473,37 @@ fn parse(packet: Packet) -> Result<PacketData, ParsingError> {
                                     ))
                                 }
                             } else {
-                                return Err(ParsingError::PacketParsingError("Error parsing ICMP packet.".to_string()));
+                                return Err(ParsingError::PacketParsingError(
+                                    "Error parsing ICMP packet.".to_string(),
+                                ));
                             }
                         }
                         IPProtocol::ICMP6 => {
-                            return Err(ParsingError::NotSupported("ICMP6 not supported".to_string()));
+                            return Err(ParsingError::NotSupported(
+                                "ICMP6 not supported".to_string(),
+                            ));
                         }
                         IPProtocol::IGMP => {
-                            return Err(ParsingError::NotSupported("IGMP not supported".to_string()));
+                            return Err(ParsingError::NotSupported(
+                                "IGMP not supported".to_string(),
+                            ));
                         }
                         _ => {
-                            return Err(ParsingError::NotSupported("L4 protocol not supported".to_string()));
+                            return Err(ParsingError::NotSupported(
+                                "L4 protocol not supported".to_string(),
+                            ));
                         }
                     }
                 } else {
-                    return Err(ParsingError::PacketParsingError("Error parsing IPv4 datagram.".to_string()));
+                    return Err(ParsingError::PacketParsingError(
+                        "Error parsing IPv4 datagram.".to_string(),
+                    ));
                 }
             }
             ethernet::EtherType::IPv6 => {
-                return Err(ParsingError::NotSupported("IPv6 datagram not supported".to_string()));
+                return Err(ParsingError::NotSupported(
+                    "IPv6 datagram not supported".to_string(),
+                ));
             }
 
             ethernet::EtherType::ARP => {
@@ -503,7 +522,7 @@ fn parse(packet: Packet) -> Result<PacketData, ParsingError> {
                             packet.header,
                             payload_e.len(),
                             s,
-                        ) )//aggiungere app description
+                        )) //aggiungere app description
                     } else {
                         let s = format!(
                             "Reply - {} is at {}",
@@ -522,14 +541,20 @@ fn parse(packet: Packet) -> Result<PacketData, ParsingError> {
                         )) //aggiungere app description
                     }
                 } else {
-                    return Err(ParsingError::PacketParsingError("Error parsing ARP packet.".to_string()));
+                    return Err(ParsingError::PacketParsingError(
+                        "Error parsing ARP packet.".to_string(),
+                    ));
                 }
             }
             _ => {
-                return Err(ParsingError::NotSupported("L3 protocol not supported".to_string()));
+                return Err(ParsingError::NotSupported(
+                    "L3 protocol not supported".to_string(),
+                ));
             }
         }
     } else {
-        return Err(ParsingError::PacketParsingError("Error parsing Ethernet frame.".to_string()));
+        return Err(ParsingError::PacketParsingError(
+            "Error parsing Ethernet frame.".to_string(),
+        ));
     }
 }
