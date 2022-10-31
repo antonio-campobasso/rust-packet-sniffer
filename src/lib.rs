@@ -209,7 +209,11 @@ impl CaptureDevice {
         match parsed_p {
             Ok(packet) => Ok(packet),
             Err(e) => {
-                return Err(e);
+                match e {
+                    ParsingError::NotSupported(s) => {println!("{}",s)}
+                    ParsingError::PacketParsingError(s) => {println!("{}",s)}
+                }
+                return Err(ParsingError::NotSupported("".to_string()))
             }
         }
     }
