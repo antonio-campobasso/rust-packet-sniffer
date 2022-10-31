@@ -70,7 +70,7 @@ fn main() {
             };
             return;
         },
-    }; // TODO: capisci come fare
+    };
 
     // Thread variables
     let report_collector_t = report_collector.clone();
@@ -120,7 +120,6 @@ fn main() {
             sleep(Duration::from_secs(params.time_interval as u64));
 
             let (lock, cvar) = &*running_cvar_t;
-            println!("running_cvar lock acquired by t2");
 
             // Pause condvar
             let _guard = cvar.wait_while(lock.lock().unwrap(), |running| *running == false);

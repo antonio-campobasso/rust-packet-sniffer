@@ -46,7 +46,7 @@ pub enum Error {
 }
 
 const DEFAULT_TIME_INTERVAL: usize = 10;
-const DEFAULT_FILE_NAME: &str = "/report.txt";
+const DEFAULT_FILE_NAME: &str = "report.txt";
 const DEFAULT_FILTER_STRING: &str = "not ip6 and not igmp";
 
 pub fn get_params() -> Result<Params, Error> {
