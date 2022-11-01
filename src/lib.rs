@@ -11,6 +11,7 @@ use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 use std::string::ToString;
+use std::vec;
 
 //--------------------------------------
 #[derive(Eq, PartialEq, Hash, Debug)]
@@ -151,7 +152,7 @@ pub struct CaptureDevice {
     cap: Capture<Active>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum NetworkInterfaceError {
     CaptureDeviceOpeningError(String),
     WrongNameFormat(String),
@@ -210,10 +211,14 @@ impl CaptureDevice {
             Ok(packet) => Ok(packet),
             Err(e) => {
                 match e {
-                    ParsingError::NotSupported(s) => {println!("{}",s)}
-                    ParsingError::PacketParsingError(s) => {println!("{}",s)}
+                    ParsingError::NotSupported(s) => {
+                        println!("{}", s)
+                    }
+                    ParsingError::PacketParsingError(s) => {
+                        println!("{}", s)
+                    }
                 }
-                return Err(ParsingError::NotSupported("".to_string()))
+                return Err(ParsingError::NotSupported("".to_string()));
             }
         }
     }
@@ -233,8 +238,6 @@ pub fn list_all_devices() -> Result<Vec<Device>, NetworkInterfaceError> {
             return Err(NetworkInterfaceError::NoDevicesError(e.to_string()));
         }
     }
-
-    //devices.iter().filter(|device| device.flags.connection_status == ConnectionStatus::Connected).collect::<Vec<Device>>()
 }
 //----------------------------------------------
 // TODO: Implementare il tratto drop?
@@ -299,6 +302,24 @@ impl ReportCollector {
         }
     }
 
+    fn sort_report(&self) -> Option<Vec<(&ConnInfo, &ConnData)>> {
+        let mut v: Vec<(&ConnInfo, &ConnData)> = self.report.iter().collect();
+        v.sort_by(|a, b| {
+            if a.1.ts_first.tv_sec == b.1.ts_first.tv_sec {
+                a.1.ts_first
+                    .tv_usec
+                    .partial_cmp(&b.1.ts_first.tv_usec)
+                    .unwrap()
+            } else {
+                a.1.ts_first
+                    .tv_sec
+                    .partial_cmp(&b.1.ts_first.tv_sec)
+                    .unwrap()
+            }
+        });
+
+        return Some(v);
+    }
     pub fn produce_report_to_file(&self, file_name: PathBuf) -> Result<(), ReportError> {
         let of = File::create(file_name);
         let mut f = match of {
@@ -318,7 +339,8 @@ impl ReportCollector {
         }
         let mut i = 0;
 
-        for (k, v) in self.report.iter() {
+
+        for (k, v) in self.sort_report().unwrap() {
             //let s = format!("\t{:>5}\t|\t{:>15}\t|\t{:>15}\t|\t{:>7}\t|\t{:>7}\t|\t{:>7}\t|\t{:>7}.{:06}\t|\t{:>7}.{:06}\t|\t{:>7}\t|\t{:>7}\t|\n",i,k.src.to_string(),k.dst.to_string(),k.src_port.to_string(),k.dst_port.to_string(),k.protocol.to_string(),(v.ts_first.tv_sec - self.now.tv_sec), (v.ts_first.tv_usec-self.now.tv_usec),(v.ts_last.tv_sec-self.now.tv_sec),(v.ts_last.tv_usec-self.now.tv_usec), v.total_bytes.to_string(),k.app_descr.to_string());
             let ts_first: timeval = ReportCollector::sub_timeval(v.ts_first, self.now);
             let ts_last: timeval = ReportCollector::sub_timeval(v.ts_last, self.now);
