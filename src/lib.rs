@@ -171,7 +171,7 @@ impl CaptureDevice {
                 let dev = inner
                     .promisc(true)
                     .snaplen(65535)
-                    .buffer_size(65535) //serve per vedere subito output quando inviamo pochi dati, altrimenti non vedevo efficacia filtri
+                    .buffer_size(131072) //serve per vedere subito output quando inviamo pochi dati, altrimenti non vedevo efficacia filtri
                     .open();
                 match dev {
                     Ok(inner_dev) => inner_dev,
