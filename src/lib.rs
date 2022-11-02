@@ -11,7 +11,6 @@ use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 use std::string::ToString;
-use std::vec;
 
 //--------------------------------------
 #[derive(Eq, PartialEq, Hash, Debug)]
@@ -210,15 +209,7 @@ impl CaptureDevice {
         match parsed_p {
             Ok(packet) => Ok(packet),
             Err(e) => {
-                match e {
-                    ParsingError::NotSupported(s) => {
-                        println!("{}", s)
-                    }
-                    ParsingError::PacketParsingError(s) => {
-                        println!("{}", s)
-                    }
-                }
-                return Err(ParsingError::NotSupported("".to_string()));
+                Err(e)
             }
         }
     }

@@ -54,22 +54,22 @@ fn main() {
             match e {
                 params::Error::NoDevicesError => {
                     println!("No capture devices found");
-                },
+                }
                 params::Error::ParseError => {
                     println!("Parsing error");
-                },
+                }
                 params::Error::WrongFilterFormat => {
                     println!("Wrong filter passed");
-                },
+                }
                 params::Error::WrongNameFormat => {
                     println!("Wrong name of interface");
-                },
+                }
                 params::Error::OpeningError => {
                     println!("Error in connection opening");
-                },
+                }
             };
             return;
-        },
+        }
     };
 
     // Thread variables
@@ -81,31 +81,40 @@ fn main() {
     threads.push(thread::spawn(move || {
         match CaptureDevice::new(params.network_interface, Some(params.filter)) {
             Ok(mut capture) => {
-                while let Ok(packet) = capture.next_packet() {
-                    let (lock, cvar) = &*running_cvar_t;
+                loop {
+                    match capture.next_packet() {
+                        Ok(packet) => {
+                            let (lock, cvar) = &*running_cvar_t;
 
-                    // Pause condvar
-                    let _guard = cvar.wait_while(lock.lock().unwrap(), |running| *running == false);
+                            // Pause condvar
+                            let _guard =
+                                cvar.wait_while(lock.lock().unwrap(), |running| *running == false);
 
-                    let stop = stop_t.lock().unwrap();
-                    if *stop {
-                        break;
-                    }
+                            let stop = stop_t.lock().unwrap();
+                            if *stop {
+                                break;
+                            }
 
-                    //println!("Pacchetto Inserito : {:?} - {}", packet.ci, packet.cd); // DEBUG
-                    let mut rep = report_collector_t.lock().unwrap();
-                    rep.add_packet(packet);
+                            //println!("Pacchetto Inserito : {:?} - {}", packet.ci, packet.cd); // DEBUG
+                            let mut rep = report_collector_t.lock().unwrap();
+                            rep.add_packet(packet);
+                        }
+                        Err(e) => match e {
+                            ParsingError::NotSupported(s) | ParsingError::PacketParsingError(s) => {
+                                println!("{}", s)
+                            }
+                        },
+                    };
                 }
+
                 println!("Capture connection terminated.");
             }
-            Err(e) => {
-                match e {
-                    NetworkInterfaceError::CaptureDeviceOpeningError(e)
-                    | NetworkInterfaceError::WrongNameFormat(e)
-                    | NetworkInterfaceError::FilterError(e)
-                    | NetworkInterfaceError::NoDevicesError(e) => println!("{}", e),
-                }
-            }
+            Err(e) => match e {
+                NetworkInterfaceError::CaptureDeviceOpeningError(e)
+                | NetworkInterfaceError::WrongNameFormat(e)
+                | NetworkInterfaceError::FilterError(e)
+                | NetworkInterfaceError::NoDevicesError(e) => println!("{}", e),
+            },
         }
     }));
 
@@ -139,6 +148,8 @@ fn main() {
                     | ReportError::FooterWritingError(e) => println!("{}", e),
                 }
                 break;
+            } else {
+                println!("Report updated");
             }
         }
         println!("Report manager thread terminated");
@@ -190,4 +201,5 @@ fn main() {
     }
 
     // NOTE: non ho bisogno di join sui thread
+    println!("Program Terminated");
 }

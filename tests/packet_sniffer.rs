@@ -1,4 +1,4 @@
-use libc::{timeval, time_t};
+use libc::timeval;
 use packet_sniffer::*;
 
 #[test]
