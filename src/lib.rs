@@ -139,7 +139,7 @@ impl PacketData {
             protocol,
             description.to_string(),
         );
-        let cd = ConnData::new(packet_header.ts, packet_header.ts, length + 38); //+38
+        let cd = ConnData::new(packet_header.ts, packet_header.ts, length + 38); //+38 pach_header.len 
         Self { ci, cd }
     }
 }
