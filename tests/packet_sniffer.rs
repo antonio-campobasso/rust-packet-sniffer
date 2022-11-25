@@ -168,7 +168,21 @@ fn capture_device_created_with_valid_values() {
 fn capture_device_created_with_inesistent_interface() {
     let interface_name = "eth777".into();
     let cap_d = CaptureDevice::new(interface_name, None);
-    assert_eq!(cap_d.err(), Some(NetworkInterfaceError::CaptureDeviceOpeningError("libpcap error: SIOCGIFHWADDR: No such device".to_string())));
+    assert_eq!(cap_d.err().unwrap(), NetworkInterfaceError::CaptureDeviceOpeningError("libpcap error: SIOCGIFHWADDR: No such device".to_string()));
+}
+
+#[test]
+fn capture_device_created_with_valid_filter() {
+    let interface_name = "eth0".into();
+    let cap_d = CaptureDevice::new(interface_name, Some("igmp".to_string()));
+    assert!(cap_d.is_ok());
+}
+
+#[test]
+fn  capture_device_created_with_inesistent_filter() {
+    let interface_name = "eth0".into();
+    let cap_d = CaptureDevice::new(interface_name, Some("UDP".to_string()));
+    assert_eq!(cap_d.err().unwrap(), NetworkInterfaceError::FilterError("ERROR: filter not found\n".to_string())); //non riesco a confrontare stringa
 }
 
 //--------------------------------------
@@ -190,7 +204,7 @@ fn report_produced_with_error() {
     let pack_head = cap.next_packet().unwrap().header;
     let packet_data = PacketData::new("8.8.8.8".to_string(), "1.1.1.1".to_string(), 12, 40, "UDP".to_string(), pack_head , 12, "Some messages".to_string());
     rep.add_packet(packet_data);
-    assert_eq!(rep.produce_report_to_file("/home/str/rrr/uvx".into()).err(), Some(ReportError::CreationFileError("No such file or directory (os error 2)".to_string())));
+    assert_eq!(rep.produce_report_to_file("/home/str/rrr/uvx".into()).err().unwrap(), ReportError::CreationFileError("No such file or directory (os error 2)".to_string()));
 }
 
 

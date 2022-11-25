@@ -190,8 +190,8 @@ impl CaptureDevice {
             let filtered = cap_d_string.filter(&filter.as_ref().unwrap(), true);
             match filtered {
                 Ok(_) => {}
-                Err(e) => {
-                    return Err(NetworkInterfaceError::FilterError(e.to_string()));
+                Err(_e) => {
+                    return Err(NetworkInterfaceError::FilterError("ERROR: filter not found\n".to_string()));
                 }
             }
         }
