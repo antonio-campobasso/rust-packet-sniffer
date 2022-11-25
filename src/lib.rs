@@ -233,7 +233,7 @@ pub fn list_all_devices() -> Result<Vec<Device>, NetworkInterfaceError> {
 //----------------------------------------------
 // TODO: Implementare il tratto drop?
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ReportError {
     CreationFileError(String),
     HeaderWritingError(String),

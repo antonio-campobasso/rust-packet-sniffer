@@ -2,6 +2,12 @@ use libc::timeval;
 use packet_sniffer::*;
 use pcap::{Active, Capture, ConnectionStatus, Device, Packet, PacketHeader};
 use std::path::Path;
+use pktparse::ethernet::MacAddress;
+use pktparse::ip::IPProtocol;
+
+
+
+//--------------------------------------
 
 #[test]
 fn conn_info_created_with_valid_values() {
@@ -13,9 +19,22 @@ fn conn_info_created_with_valid_values() {
     assert_eq!(conn_info.protocol,"UDP".to_string());
     assert_eq!(conn_info.app_descr,"Some messages".to_string());
 }
+
+#[test]
+fn conn_info_display_trait() {
+    let conn_info = ConnInfo::new("me".to_string(),"you".to_string(),1,2, "UDP".to_string(),"Some messages".to_string());
+    assert_eq!(format!("The conn_info is: {conn_info}"), "The conn_info is: (me|you|UDP|1|2|Some messages)");
+}
+
 #[test]
 #[should_panic]
-#[ignore]
+fn conn_info_display_trait_err() {
+    let conn_info = ConnInfo::new("me".to_string(),"you".to_string(),1,2, "UDP".to_string(),"Some messages".to_string());
+    assert_eq!(format!("The conn_info is: {conn_info}"), "The conn_info is: (m|you|UDP|1|2|Some messages)");
+}
+
+#[test]
+#[should_panic]
 fn conn_info_created_with_invalid_src() {
     let conn_info = ConnInfo::new("me".to_string(),"you".to_string(),1,2, "UDP".to_string(),"Some messages".to_string());
     assert_eq!(conn_info.src,"wrong".to_string());
@@ -28,7 +47,6 @@ fn conn_info_created_with_invalid_src() {
 
 #[test]
 #[should_panic]
-#[ignore]
 fn conn_info_created_with_invalid_src_port() {
     let conn_info = ConnInfo::new("me".to_string(),"you".to_string(),1,2, "UDP".to_string(),"Some messages".to_string());
     assert_eq!(conn_info.src,"me".to_string());
@@ -38,9 +56,9 @@ fn conn_info_created_with_invalid_src_port() {
     assert_eq!(conn_info.protocol,"UDP".to_string());
     assert_eq!(conn_info.app_descr,"Some messages".to_string());
 }
+
 #[test]
 #[should_panic]
-#[ignore]
 fn conn_info_created_with_invalid_dst() {
     let conn_info = ConnInfo::new("me".to_string(),"you".to_string(),1,2, "UDP".to_string(),"Some messages".to_string());
     assert_eq!(conn_info.src,"me".to_string());
@@ -50,9 +68,9 @@ fn conn_info_created_with_invalid_dst() {
     assert_eq!(conn_info.protocol,"UDP".to_string());
     assert_eq!(conn_info.app_descr,"Some messages".to_string());
 }
+
 #[test]
 #[should_panic]
-#[ignore]
 fn conn_info_created_with_invalid_dst_port() {
     let conn_info = ConnInfo::new("me".to_string(),"you".to_string(),1,2, "UDP".to_string(),"Some messages".to_string());
     assert_eq!(conn_info.src,"me".to_string());
@@ -63,6 +81,7 @@ fn conn_info_created_with_invalid_dst_port() {
     assert_eq!(conn_info.app_descr,"Some messages".to_string());
 }
 
+//--------------------------------------
 
 #[test]
 fn conn_data_created_with_valid_values() {
@@ -74,15 +93,60 @@ fn conn_data_created_with_valid_values() {
     assert_eq!(conn_data.total_bytes, 10);
 }
 
+#[test]
+fn conn_data_display_trait() {
+    let conn_data = ConnData::new(timeval { tv_sec: (1), tv_usec: (0) },timeval { tv_sec: (2), tv_usec: (1) },10);
+    assert_eq!(format!("The conn_data is: {conn_data}"), "The conn_data is: (tot_bytes:10 ts_first:1.000000 ts_last:2.000001)");
+}
+
+#[test]
+#[should_panic]
+fn conn_data_created_with_invalid_values() {
+    let conn_data = ConnData::new(timeval { tv_sec: (1), tv_usec: (0) },timeval { tv_sec: (2), tv_usec: (1) },10);
+    assert_eq!(conn_data.ts_first.tv_sec as u64, 1);
+    assert_eq!(conn_data.ts_first.tv_usec as u64, 0);
+    assert_eq!(conn_data.ts_last.tv_sec as u64, 2);
+    assert_eq!(conn_data.ts_last.tv_usec as u64, 1);
+    assert_eq!(conn_data.total_bytes, 11);
+}
+
+//--------------------------------------
+
+
+#[test]
+fn implementation_to_string_trait() {
+   let ip1 = IPProtocol::ICMP;
+   let ip2 = IPProtocol::UDP;
+   let ip3 = IPProtocol::TCP;
+   //let x: MacAddress = MacAddress::;
+   assert_eq!(ip1.tostring(),"ICMP".to_string());
+   assert_eq!(ip2.tostring(),"UDP".to_string());
+   assert_eq!(ip3.tostring(),"TCP".to_string());
+}
+
+#[test]
+#[should_panic]
+fn implementation_to_string_trait_err() {
+   let ip1 = IPProtocol::ICMP;
+   let ip2 = IPProtocol::UDP;
+   let ip3 = IPProtocol::TCP;
+   //let x: MacAddress = MacAddress::;
+   assert_eq!(ip1.tostring(),"ICP".to_string());
+   assert_eq!(ip2.tostring(),"UDP".to_string());
+   assert_eq!(ip3.tostring(),"TCP".to_string());
+}
+
+//--------------------------------------
 
 #[test]
 fn packet_data_created_with_valid_values() {
-
-    let mut cap = Capture::from_file(Path::new("tests/packet_snaplen_20.pcap")).unwrap();
+    let mut cap = Capture::from_file(Path::new("tests/data/packet_snaplen_20.pcap")).unwrap();
     let pack_head = cap.next_packet().unwrap().header;
     let packet_data = PacketData::new("8.8.8.8".to_string(), "1.1.1.1".to_string(), 12, 40, "UDP".to_string(), pack_head , 12, "Some messages".to_string());
-    //assert_eq!(packet_data.cd.ts_first, pack_head.ts.tv_sec);
-    //assert_eq!(packet_data.cd.ts_last, pack_head.ts);
+    assert_eq!(packet_data.cd.ts_first.tv_sec as u64, pack_head.ts.tv_sec as u64);
+    assert_eq!(packet_data.cd.ts_first.tv_usec as u64, pack_head.ts.tv_usec as u64);
+    assert_eq!(packet_data.cd.ts_last.tv_sec as u64, pack_head.ts.tv_sec as u64);
+    assert_eq!(packet_data.cd.ts_last.tv_usec as u64, pack_head.ts.tv_usec as u64);
     assert_eq!(packet_data.cd.total_bytes,pack_head.len as usize - 48 ); //TODO togliere il -48
     assert_eq!(packet_data.ci.dst, "1.1.1.1".to_string());
     assert_eq!(packet_data.ci.app_descr, "Some messages".to_string());
@@ -91,13 +155,7 @@ fn packet_data_created_with_valid_values() {
     assert_eq!(packet_data.ci.src_port, 12);
 } 
 
-
-/*#[test]
-#[should_panic]
-fn capture_device_created_with_invalid_interface_name() {
-    let cap_d = CaptureDevice::new("eth0".to_string(), None).unwrap();
-}
- */
+//--------------------------------------
 
 #[test]
 fn capture_device_created_with_valid_values() {
@@ -107,19 +165,36 @@ fn capture_device_created_with_valid_values() {
 }
 
 #[test]
-fn capture_device_created_with_invalid_values() {
+fn capture_device_created_with_inesistent_interface() {
     let interface_name = "eth777".into();
     let cap_d = CaptureDevice::new(interface_name, None);
     assert_eq!(cap_d.err(), Some(NetworkInterfaceError::CaptureDeviceOpeningError("libpcap error: SIOCGIFHWADDR: No such device".to_string())));
 }
 
+//--------------------------------------
 
-/* 
 #[test]
-#[should_panic]
-fn capture_device_created_with_invalid_interface_name() {
-    let cap_d = CaptureDevice::new("eth222".to_string(), None).unwrap();
+fn report_produced_with_success() {
+    let mut rep = ReportCollector::new();
+    let mut cap = Capture::from_file(Path::new("tests/data/packet_snaplen_20.pcap")).unwrap();
+    let pack_head = cap.next_packet().unwrap().header;
+    let packet_data = PacketData::new("8.8.8.8".to_string(), "1.1.1.1".to_string(), 12, 40, "UDP".to_string(), pack_head , 12, "Some messages".to_string());
+    rep.add_packet(packet_data);
+    assert!(rep.produce_report_to_file("rep.txt".into()).is_ok()); //eliminare rep.txt che si crea durante esecuzione dei test
 }
-*/
+
+#[test]
+fn report_produced_with_error() {
+    let mut rep = ReportCollector::new();
+    let mut cap = Capture::from_file(Path::new("tests/data/packet_snaplen_20.pcap")).unwrap();
+    let pack_head = cap.next_packet().unwrap().header;
+    let packet_data = PacketData::new("8.8.8.8".to_string(), "1.1.1.1".to_string(), 12, 40, "UDP".to_string(), pack_head , 12, "Some messages".to_string());
+    rep.add_packet(packet_data);
+    assert_eq!(rep.produce_report_to_file("/home/str/rrr/uvx".into()).err(), Some(ReportError::CreationFileError("No such file or directory (os error 2)".to_string())));
+}
+
+
+
+
 
 
