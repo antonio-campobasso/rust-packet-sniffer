@@ -1,8 +1,7 @@
 use libc::timeval;
 use packet_sniffer::*;
-use pcap::{Active, Capture, ConnectionStatus, Device, Packet, PacketHeader};
+use pcap::Capture;
 use std::path::Path;
-use pktparse::ethernet::MacAddress;
 use pktparse::ip::IPProtocol;
 
 
@@ -130,7 +129,7 @@ fn implementation_to_string_trait_err() {
    let ip1 = IPProtocol::ICMP;
    let ip2 = IPProtocol::UDP;
    let ip3 = IPProtocol::TCP;
-   //let x: MacAddress = MacAddress::;
+
    assert_eq!(ip1.tostring(),"ICP".to_string());
    assert_eq!(ip2.tostring(),"UDP".to_string());
    assert_eq!(ip3.tostring(),"TCP".to_string());
@@ -181,9 +180,26 @@ fn capture_device_created_with_valid_filter() {
 #[test]
 fn  capture_device_created_with_inesistent_filter() {
     let interface_name = "eth0".into();
-    let cap_d = CaptureDevice::new(interface_name, Some("UDP".to_string()));
+    let cap_d = CaptureDevice::new(interface_name, Some("wrong_filter".to_string()));
     assert_eq!(cap_d.err().unwrap(), NetworkInterfaceError::FilterError("ERROR: filter not found\n".to_string())); //non riesco a confrontare stringa
 }
+
+/* 
+#[test]
+#[ignore]
+fn next_packet_parsing_error() {
+    let interface_name = "eth0".into();
+    let cap_d = CaptureDevice::new(interface_name, Some("ip6".to_string()));
+    assert_eq!(cap_d.unwrap().next_packet().err().unwrap(),ParsingError::PacketParsingError("Error parsing TCP segment.".to_string()));
+}
+*/
+
+#[test]
+fn network_devices_listed() {
+    let devs = list_all_devices();
+    assert!(devs.is_ok());
+}
+
 
 //--------------------------------------
 
@@ -206,6 +222,7 @@ fn report_produced_with_error() {
     rep.add_packet(packet_data);
     assert_eq!(rep.produce_report_to_file("/home/str/rrr/uvx".into()).err().unwrap(), ReportError::CreationFileError("No such file or directory (os error 2)".to_string()));
 }
+
 
 
 

@@ -358,6 +358,7 @@ impl ReportCollector {
     }
 }
 
+#[derive(Debug,PartialEq)]
 pub enum ParsingError {
     NotSupported(String),
     PacketParsingError(String),
@@ -391,7 +392,6 @@ fn app_recognition_tcp(src: u16, dst: u16) -> String {
 }
 
 fn parse(packet: Packet) -> Result<PacketData, ParsingError> {
-    // TODO errori
     if let Ok((payload_e, frame)) = ethernet::parse_ethernet_frame(packet.data) {
         match frame.ethertype {
             ethernet::EtherType::IPv4 => {
