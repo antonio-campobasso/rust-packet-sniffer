@@ -9,34 +9,7 @@ use std::{
     time::Duration,
 };
 
-use clap::Parser;
-
 use crate::params::get_params;
-
-#[derive(Parser)]
-#[clap(author, version, about, long_about = None)]
-
-struct Args {
-    /// Enables guided mode
-    #[clap(short, long, action, value_name = "guided mode")]
-    guided: bool,
-
-    /// Network interface to perform the sniffing operation. Defaults to the first interface found.
-    #[clap(value_parser, value_name = "network interface")]
-    network_interface: Option<String>,
-
-    /// Time interval between report writings. Defaults to 10 seconds.
-    #[clap(value_parser, value_name = "time interval")]
-    time_interval: Option<usize>,
-
-    /// Path of the file in which the report will be written. Defaults to "./report.txt".
-    #[clap(value_parser, value_name = "output file")]
-    file_name: Option<String>,
-
-    /// Filter to apply to sniffed packets
-    #[clap(value_parser, value_name = "filter")]
-    filter_string: Option<String>,
-}
 
 fn main() {
     // Threads
@@ -48,29 +21,7 @@ fn main() {
     let stop = Arc::new(Mutex::new(false));
 
     // Command line variables
-    let params = match get_params() {
-        Ok(params) => params,
-        Err(e) => {
-            match e {
-                params::Error::NoDevicesError => {
-                    println!("No capture devices found");
-                }
-                params::Error::ParseError => {
-                    println!("Parsing error");
-                }
-                params::Error::WrongFilterFormat => {
-                    println!("Wrong filter passed");
-                }
-                params::Error::WrongNameFormat => {
-                    println!("Wrong name of interface");
-                }
-                params::Error::OpeningError => {
-                    println!("Error in connection opening");
-                }
-            };
-            return;
-        }
-    };
+    let params = get_params();
 
     // Thread variables
     let report_collector_t = report_collector.clone();
@@ -101,21 +52,24 @@ fn main() {
                         }
                         Err(e) => match e {
                             ParsingError::NotSupported(s) | ParsingError::PacketParsingError(s) => {
-                                println!("{}", s)
+                                println!("Error: {}", s);
                             }
                         },
                     };
                 }
-
-                println!("Capture connection terminated.");
             }
             Err(e) => match e {
                 NetworkInterfaceError::CaptureDeviceOpeningError(e)
                 | NetworkInterfaceError::WrongNameFormat(e)
                 | NetworkInterfaceError::FilterError(e)
-                | NetworkInterfaceError::NoDevicesError(e) => println!("{}", e),
+                | NetworkInterfaceError::NoDevicesError(e) => {
+                    println!("Error: {}", e);
+                    let mut stop = stop_t.lock().unwrap();
+                    *stop = true;
+                }
             },
         }
+        println!("Capture connection terminated, type anything to stop the program");
     }));
 
     // Thread variables
@@ -145,18 +99,22 @@ fn main() {
                     ReportError::CreationFileError(e)
                     | ReportError::HeaderWritingError(e)
                     | ReportError::ReportWritingError(e)
-                    | ReportError::FooterWritingError(e) => println!("{}", e),
+                    | ReportError::FooterWritingError(e) => {
+                        println!("Error: {}", e);
+                        let mut stop = stop_t.lock().unwrap();
+                        *stop = true;
+                    }
                 }
                 break;
             } else {
                 println!("Report updated");
             }
         }
-        println!("Report manager thread terminated");
+        println!("Report manager thread terminated, type anything to stop the program");
     }));
 
     let mut s = String::new();
-    println!("Acquisition started, type 'help' to see available commands.");
+    println!("Acquisition started, type 'help' or 'h' to see available commands.");
     loop {
         s.clear();
         stdin()
@@ -165,26 +123,27 @@ fn main() {
 
         let (lock, cvar) = &*running_cvar;
         let mut running = lock.lock().unwrap();
+        let mut stop = stop.lock().unwrap();
 
         match s.trim().to_lowercase().as_str() {
             "resume" | "r" => {
                 *running = true;
-                println!("Sniffing in process");
+                println!("Sniffing in process, type `pause` or `p` to pause the program and `stop` or `s` to stop it");
                 cvar.notify_all();
             }
             "pause" | "p" => {
                 *running = false;
-                println!("Sniffing paused, type 'resume' to unpause");
+                println!(
+                    "Sniffing paused, type 'resume' or `r` to unpause or `stop` or `s` to stop it"
+                );
                 cvar.notify_all();
             }
             "stop" | "s" => {
-                let mut stop = stop.lock().unwrap();
                 *stop = true;
 
                 *running = true;
-                println!("Stopped");
+                println!("Program stopped");
                 cvar.notify_all();
-                break;
             }
             "help" | "h" => {
                 println!(
@@ -197,6 +156,10 @@ fn main() {
             any => {
                 println!("Wrong command: {}", any)
             }
+        };
+
+        if *stop {
+            break;
         }
     }
 
