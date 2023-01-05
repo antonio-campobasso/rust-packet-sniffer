@@ -21,7 +21,19 @@ fn main() {
     let stop = Arc::new(Mutex::new(false));
 
     // Command line variables
-    let params = get_params();
+    let raw_params =  get_params();
+
+    if let Err(param_error) = raw_params {
+        match param_error {
+            params::ParamErrors::MissingNetworkInterface => println!("Please insert a valid network interface."),
+            params::ParamErrors::MissingTimeInterval => println!("Please insert a valid time interval."),
+            params::ParamErrors::MissingFileName => println!("Please insert a file name."),
+        };
+
+        return;
+    }
+
+    let params = raw_params.unwrap();
 
     // Thread variables
     let report_collector_t = report_collector.clone();
