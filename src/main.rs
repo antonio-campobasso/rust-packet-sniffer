@@ -163,6 +163,6 @@ fn main() {
         }
     }
 
-    // NOTE: non ho bisogno di join sui thread
+
     println!("Program Terminated");
 }

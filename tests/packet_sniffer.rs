@@ -117,7 +117,8 @@ fn implementation_to_string_trait() {
    let ip1 = IPProtocol::ICMP;
    let ip2 = IPProtocol::UDP;
    let ip3 = IPProtocol::TCP;
-   //let x: MacAddress = MacAddress::;
+
+
    assert_eq!(ip1.tostring(),"ICMP".to_string());
    assert_eq!(ip2.tostring(),"UDP".to_string());
    assert_eq!(ip3.tostring(),"TCP".to_string());
@@ -146,7 +147,7 @@ fn packet_data_created_with_valid_values() {
     assert_eq!(packet_data.cd.ts_first.tv_usec as u64, pack_head.ts.tv_usec as u64);
     assert_eq!(packet_data.cd.ts_last.tv_sec as u64, pack_head.ts.tv_sec as u64);
     assert_eq!(packet_data.cd.ts_last.tv_usec as u64, pack_head.ts.tv_usec as u64);
-    assert_eq!(packet_data.cd.total_bytes,pack_head.len as usize - 48 ); //TODO togliere il -48
+    assert_eq!(packet_data.cd.total_bytes,pack_head.len as usize - 48 );
     assert_eq!(packet_data.ci.dst, "1.1.1.1".to_string());
     assert_eq!(packet_data.ci.app_descr, "Some messages".to_string());
     assert_eq!(packet_data.ci.dst_port, 40);
@@ -181,18 +182,8 @@ fn capture_device_created_with_valid_filter() {
 fn  capture_device_created_with_inesistent_filter() {
     let interface_name = "eth0".into();
     let cap_d = CaptureDevice::new(interface_name, Some("wrong_filter".to_string()));
-    assert_eq!(cap_d.err().unwrap(), NetworkInterfaceError::FilterError("ERROR: filter not found\n".to_string())); //non riesco a confrontare stringa
+    assert_eq!(cap_d.err().unwrap(), NetworkInterfaceError::FilterError("ERROR: filter not found\n".to_string()));
 }
-
-/* 
-#[test]
-#[ignore]
-fn next_packet_parsing_error() {
-    let interface_name = "eth0".into();
-    let cap_d = CaptureDevice::new(interface_name, Some("ip6".to_string()));
-    assert_eq!(cap_d.unwrap().next_packet().err().unwrap(),ParsingError::PacketParsingError("Error parsing TCP segment.".to_string()));
-}
-*/
 
 #[test]
 fn network_devices_listed() {
@@ -210,7 +201,7 @@ fn report_produced_with_success() {
     let pack_head = cap.next_packet().unwrap().header;
     let packet_data = PacketData::new("8.8.8.8".to_string(), "1.1.1.1".to_string(), 12, 40, "UDP".to_string(), pack_head , 12, "Some messages".to_string());
     rep.add_packet(packet_data);
-    assert!(rep.produce_report_to_file("rep.txt".into()).is_ok()); //eliminare rep.txt che si crea durante esecuzione dei test
+    assert!(rep.produce_report_to_file("rep.txt".into()).is_ok());
 }
 
 #[test]
