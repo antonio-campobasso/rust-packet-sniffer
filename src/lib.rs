@@ -14,14 +14,19 @@ use std::string::ToString;
 
 //--------------------------------------
 #[derive(Eq, PartialEq, Hash, Debug)]
+/// ConnInfo is the key of our hashmap, this tuple is unique for each connection
 pub struct ConnInfo {
-    pub src: String,
     ///source address (IP or MAC)
-    pub dst: String,
+    pub src: String,
     ///destination address (IP or MAC)
+    pub dst: String,
+    ///tcp or udp source port
     pub src_port: u16,
+    ///tcp or udp destination port
     pub dst_port: u16,
+    ///TCP or UDP or ICMP
     pub protocol: String,
+    ///it's a brief description of what application level is doing
     pub app_descr: String,
 }
 
@@ -56,9 +61,13 @@ impl Display for ConnInfo {
 }
 
 //---------------------------
+///ConnData is the value field of our hashmap
 pub struct ConnData {
+    ///ts_first is the timestamp of the first packet sent or received in a connection
     pub ts_first: timeval,
+    ///ts_last is the timestamp of the last packet of a connection
     pub ts_last: timeval,
+    ///total_bytes is a value representing the cumulative numebr of bytes exchanged in a connection
     pub total_bytes: usize,
 }
 
@@ -115,8 +124,11 @@ impl ToStr for MacAddress {
 }
 
 //--------------------------------------
+///PacketData is a struct containing the information and data of a packet in a connection
 pub struct PacketData {
+    ///ci used as a key for recognizing a packet
     pub ci: ConnInfo,
+    ///cd used to save data of a packet in a connection
     pub cd: ConnData,
 }
 
@@ -145,9 +157,13 @@ impl PacketData {
 }
 
 //----------------------------------------
+///CaptureDevice struct describes the device used for sniffing
 pub struct CaptureDevice {
+    ///name of the device (eth0, wlan0...)
     _interface_name: String,
+    ///Optionally you may set a filter
     _filter: Option<String>,
+    ///cap is the capture context
     cap: Capture<Active>,
 }
 
@@ -203,8 +219,9 @@ impl CaptureDevice {
         })
     }
 
+    ///It is a synchronous function waiting for next packet from the capture context
     pub fn next_packet(&mut self) -> Result<PacketData, ParsingError> {
-        let p = self.cap.next_packet().unwrap(); // forse è meglio cambiare nome della nostra next_packet...
+        let p = self.cap.next_packet().unwrap();
         let parsed_p = parse(p);
         match parsed_p {
             Ok(packet) => Ok(packet),
@@ -216,7 +233,7 @@ impl CaptureDevice {
 }
 
 //----------------------------------------------------------
-// list devices
+/// It is a function listing all devices available for sniffing
 pub fn list_all_devices() -> Result<Vec<Device>, NetworkInterfaceError> {
     let dev_list = Device::list();
     match dev_list {
@@ -231,9 +248,8 @@ pub fn list_all_devices() -> Result<Vec<Device>, NetworkInterfaceError> {
     }
 }
 //----------------------------------------------
-// TODO: Implementare il tratto drop?
-
 #[derive(Debug, PartialEq)]
+///Containing all the error possible during the creation of the report
 pub enum ReportError {
     CreationFileError(String),
     HeaderWritingError(String),
@@ -241,8 +257,10 @@ pub enum ReportError {
     FooterWritingError(String),
 }
 
+///It is a struct wrapping the hashmap, containing the result of the sniffing
 pub struct ReportCollector {
     report: HashMap<ConnInfo, ConnData>,
+    /// it is the "zero" time
     now: timeval,
 }
 
@@ -257,6 +275,7 @@ impl ReportCollector {
         }
     }
 
+    ///it is a function adding the packet in the report data structure
     pub fn add_packet(&mut self, packet: PacketData) -> () {
         if self.report.is_empty() {
             self.now = packet.cd.ts_first;
@@ -267,7 +286,7 @@ impl ReportCollector {
             self.report
                 .entry(packet.ci)
                 .and_modify(|cd| {
-                    cd.total_bytes += packet.cd.total_bytes + 38; //+38?
+                    cd.total_bytes += packet.cd.total_bytes + 38;
                     cd.ts_last = packet.cd.ts_first
                 })
                 .or_insert(packet.cd);
@@ -293,6 +312,7 @@ impl ReportCollector {
         }
     }
 
+    /// it used for sorting report based on timeval
     fn sort_report(&self) -> Option<Vec<(&ConnInfo, &ConnData)>> {
         let mut v: Vec<(&ConnInfo, &ConnData)> = self.report.iter().collect();
         v.sort_by(|a, b| {
@@ -311,6 +331,7 @@ impl ReportCollector {
 
         return Some(v);
     }
+    /// it's a function to create a file in which inserting the report data structure in a human readable format
     pub fn produce_report_to_file(&self, file_name: PathBuf) -> Result<(), ReportError> {
         let of = File::create(file_name);
         let mut f = match of {
@@ -363,7 +384,8 @@ pub enum ParsingError {
     NotSupported(String),
     PacketParsingError(String),
 }
-///
+
+///it is a function to determine the activity of level 6 over udp
 fn app_recognition_udp(src: u16, dst: u16) -> String {
     if dst == 53 {
         return "DNS standard query.".to_string();
@@ -379,7 +401,7 @@ fn app_recognition_udp(src: u16, dst: u16) -> String {
     "app not recognized".to_string()
 }
 
-///
+///it is a function to determine the activity of level 6 over tcp
 fn app_recognition_tcp(src: u16, dst: u16) -> String {
     if dst == 80 || src == 80 {
         return "HTTP connection.".to_string();
@@ -391,6 +413,7 @@ fn app_recognition_tcp(src: u16, dst: u16) -> String {
     "app not recognized".to_string()
 }
 
+/// it is the core function of the program, used for parsing the raw data packet and classifying what has been sniffed from the device
 fn parse(packet: Packet) -> Result<PacketData, ParsingError> {
     if let Ok((payload_e, frame)) = ethernet::parse_ethernet_frame(packet.data) {
         match frame.ethertype {
